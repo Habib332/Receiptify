@@ -1,0 +1,43 @@
+const authService = require("./auth.service");
+
+async function register(req, res, next) {
+  try {
+    const {
+      businessName,
+      businessType,
+      address,
+      phone,
+      ownerName,
+      email,
+      password,
+    } = req.body;
+
+    const result = await authService.registerBusinessOwner({
+      businessName,
+      businessType,
+      address,
+      phone,
+      ownerName,
+      email,
+      password,
+    });
+
+    res.status(201).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function login(req, res, next) {
+  try {
+    const { email, password } = req.body;
+
+    const result = await authService.login({ email, password });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login };
