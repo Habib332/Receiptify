@@ -1,5 +1,3 @@
-import React from "react";
-
 const ReceiptLogo = ({ size = 64 }: { size?: number }) => {
   return (
     <svg

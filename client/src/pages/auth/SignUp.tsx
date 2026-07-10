@@ -1,49 +1,68 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import illustration from '../../assets/sign-up.png'
 import ReceiptLogo from '../logo/MainLogo'
+import GoogleIcon from '../logo/GoogleLogo'
+import AppleIcon from '../logo/AppleLogo'
 
-function GoogleIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-            <path
-                fill="#4285F4"
-                d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
-            />
-            <path
-                fill="#34A853"
-                d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.95v2.33A9 9 0 0 0 9 18z"
-            />
-            <path
-                fill="#FBBC05"
-                d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.95A9 9 0 0 0 0 9c0 1.45.35 2.83.95 4.05l3.02-2.33z"
-            />
-            <path
-                fill="#EA4335"
-                d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .95 4.95l3.02 2.33C4.68 5.16 6.66 3.58 9 3.58z"
-            />
-        </svg>
-    )
-}
-
-function AppleIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-            <path
-                fill="#111827"
-                d="M13.13 9.44c-.02-1.86 1.52-2.75 1.59-2.8-.87-1.27-2.22-1.44-2.7-1.46-1.15-.12-2.25.68-2.83.68-.59 0-1.48-.66-2.44-.65-1.25.02-2.42.73-3.06 1.85-1.32 2.28-.34 5.66.94 7.51.63.9 1.37 1.91 2.35 1.87.94-.04 1.3-.6 2.44-.6 1.13 0 1.46.6 2.45.58 1.01-.02 1.65-.91 2.27-1.82.71-1.04 1-2.05 1.02-2.1-.02-.01-1.95-.75-1.97-2.96zM11.28 3.5c.52-.63.87-1.5.77-2.38-.75.03-1.65.5-2.19 1.12-.48.55-.9 1.44-.79 2.29.83.06 1.68-.42 2.21-1.03z"
-            />
-        </svg>
-    )
-}
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export default function SignUp() {
+    const navigate = useNavigate()
+
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
 
-    const handleSubmit = (e: FormEvent) => {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
+        setError('')
+
+        if (!name || !email || !password || !confirmPassword) {
+            setError('Please fill in all fields')
+            return
+        }
+
+        if (password !== confirmPassword) {
+            setError('Passwords do not match')
+            return
+        }
+
+        setLoading(true)
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Registration failed')
+            }
+
+            const token = data.data?.token
+            const user = data.data?.user
+
+            if (token) {
+                sessionStorage.setItem('token', token)
+            }
+            if (user) {
+                sessionStorage.setItem('user', JSON.stringify(user))
+            }
+
+            navigate('/select-business')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
@@ -102,6 +121,12 @@ export default function SignUp() {
                         <span className="text-[11px] text-gray-400">Or continue with email address</span>
                         <div className="flex-1 h-px bg-gray-200" />
                     </div>
+
+                    {error && (
+                        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-2.5">
                         <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2.5">
@@ -198,9 +223,10 @@ export default function SignUp() {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs font-semibold rounded-lg py-2.5 mt-2"
+                            disabled={loading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-xs font-semibold rounded-lg py-2.5 mt-2"
                         >
-                            Create account
+                            {loading ? 'Creating account...' : 'Create account'}
                         </button>
                     </form>
 
