@@ -1,13 +1,20 @@
 const jwt = require("jsonwebtoken");
 const env = require("../config/env");
 
-function generateToken(payload) {
-  // payload should be minimal: e.g. { userId, businessId, role }
+// Identity token: proves who you are, nothing else. Short-lived, used only to select a business.
+function generateIdentityToken(payload) {
+  // payload: { userId }
+  return jwt.sign(payload, env.jwtSecret, { expiresIn: "15m" });
+}
+
+// Session token: full access token, scoped to one business + role.
+function generateSessionToken(payload) {
+  // payload: { userId, businessId, role }
   return jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
 }
 
 function verifyToken(token) {
-  return jwt.verify(token, env.jwtSecret); // throws if invalid/expired
+  return jwt.verify(token, env.jwtSecret);
 }
 
-module.exports = { generateToken, verifyToken };
+module.exports = { generateIdentityToken, generateSessionToken, verifyToken };

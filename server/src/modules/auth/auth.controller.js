@@ -40,4 +40,18 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+async function selectBusiness(req, res, next) {
+  try {
+    // req.user comes from an identity-token-only middleware — see note below
+    const userId = req.user.userId;
+    const { businessId } = req.body;
+
+    const result = await authService.selectBusiness({ userId, businessId });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login, selectBusiness };

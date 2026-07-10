@@ -1,6 +1,9 @@
 const authRepository = require("./auth.repository");
 const { hashPassword, comparePassword } = require("../../utils/password");
-const { generateToken } = require("../../utils/jwt");
+const {
+  generateIdentityToken,
+  generateSessionToken,
+} = require("../../utils/jwt");
 const ApiError = require("../../utils/apiError");
 
 async function registerBusinessOwner({
@@ -17,7 +20,14 @@ async function registerBusinessOwner({
     throw new ApiError(409, "An account with this email already exists");
   }
 
-  // First user for a new business is always the owner
+  const passwordHash = await hashPassword(password);
+
+  const user = await authRepository.createUser({
+    name: ownerName,
+    email,
+    passwordHash,
+  });
+
   const business = await authRepository.createBusiness({
     name: businessName,
     type: businessType,
@@ -25,23 +35,15 @@ async function registerBusinessOwner({
     phone,
   });
 
-  const passwordHash = await hashPassword(password);
-
-  const user = await authRepository.createUser({
+  await authRepository.linkUserToBusiness({
     businessId: business.business_id,
-    name: ownerName,
-    email,
-    passwordHash,
+    userId: user.user_id,
     role: "owner",
   });
 
-  const token = generateToken({
-    userId: user.user_id,
-    businessId: user.business_id,
-    role: user.role,
-  });
+  const identityToken = generateIdentityToken({ userId: user.user_id });
 
-  return { user, business, token };
+  return { user, business, identityToken };
 }
 
 async function login({ email, password }) {
@@ -55,19 +57,34 @@ async function login({ email, password }) {
     throw new ApiError(401, "Invalid email or password");
   }
 
-  const token = generateToken({
-    userId: user.user_id,
-    businessId: user.business_id,
-    role: user.role,
-  });
+  const businesses = await authRepository.getUserBusinesses(user.user_id);
+  const identityToken = generateIdentityToken({ userId: user.user_id });
 
-  // strip password_hash before returning
   const { password_hash, ...safeUser } = user;
 
-  return { user: safeUser, token };
+  return { user: safeUser, businesses, identityToken };
+}
+
+async function selectBusiness({ userId, businessId }) {
+  const membership = await authRepository.getUserRoleForBusiness({
+    userId,
+    businessId,
+  });
+  if (!membership) {
+    throw new ApiError(403, "You do not belong to this business");
+  }
+
+  const sessionToken = generateSessionToken({
+    userId,
+    businessId,
+    role: membership.role,
+  });
+
+  return { sessionToken, role: membership.role };
 }
 
 module.exports = {
   registerBusinessOwner,
   login,
+  selectBusiness,
 };
