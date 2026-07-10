@@ -1,15 +1,5 @@
 const pool = require("../../config/database");
 
-async function createBusiness({ name, type, address, phone }) {
-  const result = await pool.query(
-    `INSERT INTO businesses (name, type, address, phone)
-     VALUES ($1, $2, $3, $4)
-     RETURNING business_id, name, type, address, phone, created_at`,
-    [name, type, address, phone],
-  );
-  return result.rows[0];
-}
-
 async function createUser({ name, email, passwordHash }) {
   const result = await pool.query(
     `INSERT INTO users (name, email, password_hash)
@@ -35,16 +25,6 @@ async function findUserById(userId) {
   return result.rows[0];
 }
 
-async function linkUserToBusiness({ businessId, userId, role }) {
-  const result = await pool.query(
-    `INSERT INTO business_users (business_id, user_id, role)
-     VALUES ($1, $2, $3)
-     RETURNING business_id, user_id, role, joined_at`,
-    [businessId, userId, role],
-  );
-  return result.rows[0];
-}
-
 async function getUserBusinesses(userId) {
   const result = await pool.query(
     `SELECT b.business_id, b.name, b.type, b.logo_url, bu.role
@@ -62,15 +42,13 @@ async function getUserRoleForBusiness({ userId, businessId }) {
     `SELECT role FROM business_users WHERE user_id = $1 AND business_id = $2`,
     [userId, businessId],
   );
-  return result.rows[0]; // undefined if user doesn't belong to that business
+  return result.rows[0];
 }
 
 module.exports = {
-  createBusiness,
   createUser,
   findUserByEmail,
   findUserById,
-  linkUserToBusiness,
   getUserBusinesses,
   getUserRoleForBusiness,
 };

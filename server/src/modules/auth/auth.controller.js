@@ -2,25 +2,9 @@ const authService = require("./auth.service");
 
 async function register(req, res, next) {
   try {
-    const {
-      businessName,
-      businessType,
-      address,
-      phone,
-      ownerName,
-      email,
-      password,
-    } = req.body;
+    const { name, email, password } = req.body;
 
-    const result = await authService.registerBusinessOwner({
-      businessName,
-      businessType,
-      address,
-      phone,
-      ownerName,
-      email,
-      password,
-    });
+    const result = await authService.register({ name, email, password });
 
     res.status(201).json({ success: true, data: result });
   } catch (err) {
@@ -42,7 +26,6 @@ async function login(req, res, next) {
 
 async function selectBusiness(req, res, next) {
   try {
-    // req.user comes from an identity-token-only middleware — see note below
     const userId = req.user.userId;
     const { businessId } = req.body;
 

@@ -6,15 +6,7 @@ const {
 } = require("../../utils/jwt");
 const ApiError = require("../../utils/apiError");
 
-async function registerBusinessOwner({
-  businessName,
-  businessType,
-  address,
-  phone,
-  ownerName,
-  email,
-  password,
-}) {
+async function register({ name, email, password }) {
   const existingUser = await authRepository.findUserByEmail(email);
   if (existingUser) {
     throw new ApiError(409, "An account with this email already exists");
@@ -22,28 +14,11 @@ async function registerBusinessOwner({
 
   const passwordHash = await hashPassword(password);
 
-  const user = await authRepository.createUser({
-    name: ownerName,
-    email,
-    passwordHash,
-  });
-
-  const business = await authRepository.createBusiness({
-    name: businessName,
-    type: businessType,
-    address,
-    phone,
-  });
-
-  await authRepository.linkUserToBusiness({
-    businessId: business.business_id,
-    userId: user.user_id,
-    role: "owner",
-  });
+  const user = await authRepository.createUser({ name, email, passwordHash });
 
   const identityToken = generateIdentityToken({ userId: user.user_id });
 
-  return { user, business, identityToken };
+  return { user, identityToken };
 }
 
 async function login({ email, password }) {
@@ -83,8 +58,4 @@ async function selectBusiness({ userId, businessId }) {
   return { sessionToken, role: membership.role };
 }
 
-module.exports = {
-  registerBusinessOwner,
-  login,
-  selectBusiness,
-};
+module.exports = { register, login, selectBusiness };
