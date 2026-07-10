@@ -5,7 +5,7 @@ const morgan = require("morgan");
 
 const authRoutes = require("./modules/auth/auth.routes");
 const errorMiddleware = require("./middleware/error.middleware");
-
+const businessRoutes = require("./modules/business/business.routes");
 const app = express();
 
 // Core middleware
@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", authRoutes);
-
+app.use("/api/business", businessRoutes);
 // Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true, message: "Server is running" });
