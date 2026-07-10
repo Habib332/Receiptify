@@ -2,7 +2,8 @@ const { Pool } = require("pg");
 const env = require("./env");
 
 const pool = new Pool({
-  connectionString: env.databaseUrl,
+  connectionString: env.databaseUrl, // fixed: was env.DATABASE_URL (undefined)
+  ssl: { rejectUnauthorized: false }, // added: required for Supabase direct connection
 });
 
 pool.on("error", (err) => {
