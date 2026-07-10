@@ -1,14 +1,15 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import SignIn from './pages/auth/SignIn'; // Assuming these are your component paths
-import SignUp from './pages/auth/SignUp'; 
+import Dashboard from './pages/dashboard/Dashboard';
+import ScanUpload from './pages/scan/ScanUpload';
+import ScanReview from './pages/scan/ScanReview';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<SignIn />} />
-        <Route path="/sign-in" element={<SignIn />} />
-        <Route path="/sign-up" element={<SignUp />} />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/scan" element={<ScanUpload />} />
+        <Route path="/scan/review" element={<ScanReview />} />
       </Routes>
     </Router>
   );

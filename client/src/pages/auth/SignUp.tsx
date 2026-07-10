@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import illustration from '../../assets/sign-up.png'
-import ReceiptLogo from '../logo/MainLogo'
-import GoogleIcon from '../logo/GoogleLogo'
-import AppleIcon from '../logo/AppleLogo'
+import ReceiptLogo from '../../logo/MainLogo'
+import GoogleLogo from '../../logo/GoogleLogo'
+import AppleLogo from '../../logo/AppleLogo'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -102,16 +102,15 @@ export default function SignUp() {
                                 type="button"
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
-                                <GoogleIcon />
-                                Google
+                                <GoogleLogo/>
                             </button>
 
                             <button
                                 type="button"
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
-                                <AppleIcon />
-                                Apple ID
+                                <AppleLogo/>
+                                    Apple ID
                             </button>
                         </div>
                     </div>

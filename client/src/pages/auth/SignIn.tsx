@@ -1,15 +1,61 @@
 import { useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import illustration from '../../assets/sign-in.png'
-import ReceiptLogo from '../logo/MainLogo'
-import GoogleIcon from '../logo/GoogleLogo'
-import AppleIcon from '../logo/AppleLogo'
+import ReceiptLogo from '../../logo/MainLogo'
+import GoogleLogo from '../../logo/GoogleLogo'
+import AppleLogo from '../../logo/AppleLogo'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export default function SignIn() {
+    const navigate = useNavigate()
+
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
 
-    const handleSubmit = (e: FormEvent) => {
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
+        setError('')
+
+        if (!email || !password) {
+            setError('Please fill in all fields')
+            return
+        }
+
+        setLoading(true)
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Login failed')
+            }
+
+            const token = data.data?.token
+            const user = data.data?.user
+
+            if (token) {
+                sessionStorage.setItem('token', token)
+            }
+            if (user) {
+                sessionStorage.setItem('user', JSON.stringify(user))
+            }
+
+            navigate('/select-business')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
@@ -49,7 +95,7 @@ export default function SignIn() {
                                 type="button"
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
-                                <GoogleIcon />
+                                <GoogleLogo />
                                 Google
                             </button>
 
@@ -57,7 +103,7 @@ export default function SignIn() {
                                 type="button"
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
-                                <AppleIcon />
+                                <AppleLogo />
                                 Apple ID
                             </button>
                         </div>
@@ -68,6 +114,12 @@ export default function SignIn() {
                         <span className="text-[11px] text-gray-400">Or continue with email address</span>
                         <div className="flex-1 h-px bg-gray-200" />
                     </div>
+
+                    {error && (
+                        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-2.5">
                         <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2.5">
@@ -118,9 +170,10 @@ export default function SignIn() {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white text-xs font-semibold rounded-lg py-2.5 mt-2"
+                            disabled={loading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-xs font-semibold rounded-lg py-2.5 mt-2"
                         >
-                            Start tracking
+                            {loading ? 'Signing in...' : 'Start tracking'}
                         </button>
                     </form>
 
