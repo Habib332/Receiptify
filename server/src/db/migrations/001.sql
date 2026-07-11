@@ -47,6 +47,43 @@ CREATE TABLE IF NOT EXISTS business_users (
         ON DELETE CASCADE
 );
 
+-- Add this block to your existing single schema file (001.sql), after the
+-- business_users table definition.
+
+CREATE TABLE IF NOT EXISTS receipts (
+    receipt_id      SERIAL PRIMARY KEY,
+    business_id     INTEGER NOT NULL,
+    uploaded_by     INTEGER NOT NULL,
+
+    vendor_name     VARCHAR(255) NOT NULL,   -- who the receipt is FROM (e.g. "Walmart") — not the business using Receiptify
+    amount          NUMERIC(10, 2) NOT NULL,
+    currency        VARCHAR(3) NOT NULL DEFAULT 'PKR',
+    receipt_date    DATE NOT NULL,           -- date on the receipt, not upload date
+    notes           TEXT,
+
+    image_url       TEXT,                    -- nullable until a storage provider is chosen (Phase 2)
+
+    ocr_status      VARCHAR(20) NOT NULL DEFAULT 'not_processed'
+                        CHECK (ocr_status IN ('not_processed', 'pending', 'completed', 'failed')),
+    ocr_raw_text    TEXT,                    -- unused until OCR is implemented
+
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    CONSTRAINT fk_receipt_business
+        FOREIGN KEY (business_id)
+        REFERENCES businesses(business_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_receipt_uploader
+        FOREIGN KEY (uploaded_by)
+        REFERENCES users(user_id)
+        ON DELETE RESTRICT  -- don't let a receipt lose its uploader if the user is later deleted
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipts_business_id ON receipts(business_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_uploaded_by ON receipts(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_receipts_receipt_date ON receipts(receipt_date);
+
 CREATE INDEX IF NOT EXISTS idx_business_users_user ON business_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_business_users_business ON business_users(business_id);
 

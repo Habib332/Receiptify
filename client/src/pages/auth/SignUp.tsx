@@ -47,7 +47,7 @@ export default function SignUp() {
                 throw new Error(data.message || 'Registration failed')
             }
 
-            const token = data.data?.token
+            const token = data.data?.identityToken
             const user = data.data?.user
 
             if (token) {
@@ -98,12 +98,11 @@ export default function SignUp() {
 
                         {/* Social Login */}
                         <div className="grid grid-cols-2 gap-2.5 mb-4">
-                            <button
-                                type="button"
+                            <a href={`${API_BASE_URL}/auth/google`}
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <GoogleLogo/>
-                            </button>
+                            </a>
 
                             <button
                                 type="button"

@@ -40,7 +40,7 @@ export default function SignIn() {
                 throw new Error(data.message || 'Login failed')
             }
 
-            const token = data.data?.token
+            const token = data.data?.identityToken
             const user = data.data?.user
 
             if (token) {
@@ -90,15 +90,13 @@ export default function SignIn() {
                         </p>
 
                         {/* Social Login */}
+                              {/* Social Login */}
                         <div className="grid grid-cols-2 gap-2.5 mb-4">
-                            <button
-                                type="button"
-                                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                                <GoogleLogo />
-                                Google
-                            </button>
-
+                            
+                            <a href={`${API_BASE_URL}/auth/google`} className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                            <GoogleLogo />
+                             Google
+                            </a>
                             <button
                                 type="button"
                                 className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
