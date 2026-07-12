@@ -10,6 +10,66 @@ async function createBusiness({ name, type, address, phone }) {
   return result.rows[0];
 }
 
+// Duplicate rule: same name AND same address (case-insensitive), so the
+// same chain name can exist at different locations without being blocked.
+async function findDuplicateBusiness({ name, address }) {
+  const result = await pool.query(
+    `SELECT business_id, name, address
+     FROM businesses
+     WHERE LOWER(name) = LOWER($1) AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($2, ''))`,
+    [name, address],
+  );
+  return result.rows[0];
+}
+
+async function findBusinessById(businessId) {
+  const result = await pool.query(
+    `SELECT business_id, name, type, address, phone, logo_url, created_at
+     FROM businesses WHERE business_id = $1`,
+    [businessId],
+  );
+  return result.rows[0];
+}
+
+// Looks up a specific user's role for a specific business — this is the
+// check update/delete need, since a user's role can differ per business
+// and the sessionToken's role only reflects whichever business they most
+// recently selected, not necessarily the one being modified here.
+async function getUserRoleForBusiness({ userId, businessId }) {
+  const result = await pool.query(
+    `SELECT role FROM business_users WHERE user_id = $1 AND business_id = $2`,
+    [userId, businessId],
+  );
+  return result.rows[0];
+}
+
+async function updateBusiness(
+  businessId,
+  { name, type, address, phone, logoUrl },
+) {
+  const result = await pool.query(
+    `UPDATE businesses
+     SET name = COALESCE($2, name),
+         type = COALESCE($3, type),
+         address = COALESCE($4, address),
+         phone = COALESCE($5, phone),
+         logo_url = COALESCE($6, logo_url)
+     WHERE business_id = $1
+     RETURNING business_id, name, type, address, phone, logo_url, created_at`,
+    [businessId, name, type, address, phone, logoUrl],
+  );
+  return result.rows[0];
+}
+
+async function deleteBusiness(businessId) {
+  // Cascades to business_users and receipts (ON DELETE CASCADE in schema).
+  const result = await pool.query(
+    `DELETE FROM businesses WHERE business_id = $1 RETURNING business_id, name`,
+    [businessId],
+  );
+  return result.rows[0];
+}
+
 async function linkUserToBusiness({ businessId, userId, role }) {
   const result = await pool.query(
     `INSERT INTO business_users (business_id, user_id, role)
@@ -80,4 +140,9 @@ module.exports = {
   getAllBusinesses,
   countAllBusinesses,
   getDistinctBusinessTypes,
+  findDuplicateBusiness,
+  findBusinessById,
+  getUserRoleForBusiness,
+  updateBusiness,
+  deleteBusiness,
 };

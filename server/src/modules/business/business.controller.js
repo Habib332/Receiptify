@@ -43,4 +43,49 @@ async function getDashboardStats(req, res, next) {
   }
 }
 
-module.exports = { createBusiness, listBusinesses, getDashboardStats };
+// PATCH /api/business/:businessId
+async function updateBusiness(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId } = req.params;
+    const { name, type, address, phone, logoUrl } = req.body;
+
+    const business = await businessService.updateBusiness({
+      userId,
+      businessId,
+      updates: { name, type, address, phone, logoUrl },
+    });
+
+    res.status(200).json({ success: true, data: business });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// DELETE /api/business/:businessId
+// Body must include { confirm: true } — see business.service.js for why.
+async function deleteBusiness(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId } = req.params;
+    const { confirm } = req.body;
+
+    const result = await businessService.deleteBusiness({
+      userId,
+      businessId,
+      confirm,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  createBusiness,
+  listBusinesses,
+  getDashboardStats,
+  updateBusiness,
+  deleteBusiness,
+};
