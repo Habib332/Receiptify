@@ -1,5 +1,6 @@
 const businessRepository = require("./business.repository");
 const receiptsRepository = require("../receipts/receipts.repository");
+const { uploadBusinessLogo } = require("../../utils/supabaseStorage");
 const ApiError = require("../../utils/apiError");
 
 // Confirms the requesting user is owner/manager OF THIS SPECIFIC business.
@@ -121,6 +122,44 @@ async function deleteBusiness({ userId, businessId, confirm }) {
   return businessRepository.deleteBusiness(businessId);
 }
 
+// Owner AND manager can update the logo — same permission level as a
+// general update, since a logo is just another business field.
+async function uploadLogo({
+  userId,
+  businessId,
+  fileBuffer,
+  originalName,
+  mimeType,
+}) {
+  const existing = await businessRepository.findBusinessById(businessId);
+  if (!existing) {
+    throw new ApiError(404, "Business not found");
+  }
+
+  await assertCanModifyBusiness({
+    userId,
+    businessId,
+    allowedRoles: ["owner", "manager"],
+  });
+
+  let logoUrl;
+  try {
+    logoUrl = await uploadBusinessLogo({
+      fileBuffer,
+      originalName,
+      mimeType,
+      businessId,
+    });
+  } catch (err) {
+    // uploadBusinessLogo throws plain Errors for validation (bad type/size)
+    // and for Supabase-side failures alike — surface both as a 400, since
+    // from the caller's perspective this request just didn't succeed.
+    throw new ApiError(400, err.message);
+  }
+
+  return businessRepository.updateBusiness(businessId, { logoUrl });
+}
+
 // Powers the "Available Businesses" table + search/filter controls.
 async function listBusinesses({ search, type } = {}) {
   return businessRepository.getAllBusinesses({ search, type });
@@ -156,4 +195,5 @@ module.exports = {
   getDashboardStats,
   updateBusiness,
   deleteBusiness,
+  uploadLogo,
 };

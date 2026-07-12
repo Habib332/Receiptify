@@ -24,6 +24,11 @@ const env = {
   // Where the backend sends the browser after handling Google's callback,
   // e.g. http://localhost:5173/auth/callback
   frontendOAuthCallbackUrl: required("FRONTEND_OAUTH_CALLBACK_URL"),
+
+  // Supabase Storage (business logo uploads). Service role key bypasses
+  // Row Level Security — used server-side only, NEVER sent to the frontend.
+  supabaseUrl: required("SUPABASE_URL"),
+  supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
 };
 
 module.exports = env;

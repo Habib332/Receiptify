@@ -1,7 +1,17 @@
 const express = require("express");
+const multer = require("multer");
 const router = express.Router();
 const businessController = require("./business.controller");
 const authMiddleware = require("../../middleware/auth.middleware");
+
+// In-memory storage: multer just hands us a buffer (req.file.buffer), we
+// forward that straight to Supabase — file is never written to disk on
+// this server. limits.fileSize is a fast-fail before we even attempt
+// upload; supabaseStorage.js re-checks it too (defense in depth).
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
 
 // Order matters: /stats must come before /:id-style routes if any get added
 // later, otherwise Express would try to treat "stats" as an :id param.
@@ -18,6 +28,14 @@ router.delete(
   "/:businessId",
   authMiddleware,
   businessController.deleteBusiness,
+);
+
+// multipart/form-data, field name must be "logo"
+router.post(
+  "/:businessId/logo",
+  authMiddleware,
+  upload.single("logo"),
+  businessController.uploadLogo,
 );
 
 module.exports = router;

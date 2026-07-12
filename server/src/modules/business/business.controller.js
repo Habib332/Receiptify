@@ -82,10 +82,40 @@ async function deleteBusiness(req, res, next) {
   }
 }
 
+// POST /api/business/:businessId/logo — multipart/form-data, field name "logo"
+async function uploadLogo(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId } = req.params;
+
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "No file uploaded (expected field name 'logo')",
+        });
+    }
+
+    const business = await businessService.uploadLogo({
+      userId,
+      businessId,
+      fileBuffer: req.file.buffer,
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+    });
+
+    res.status(200).json({ success: true, data: business });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createBusiness,
   listBusinesses,
   getDashboardStats,
   updateBusiness,
   deleteBusiness,
+  uploadLogo,
 };

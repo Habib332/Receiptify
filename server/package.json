@@ -13,6 +13,7 @@
     "migrate": "node src/db/migrate.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.2",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -22,6 +23,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
+    "multer": "^2.2.0",
     "pg": "^8.22.0"
   },
   "devDependencies": {
