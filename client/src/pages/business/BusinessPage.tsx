@@ -139,31 +139,32 @@ export default function BusinessesPage() {
         }
     }
 
-    const handleDelete = async (id: string) => {
-        setError('')
-        // Optimistic update
-        const prevBusinesses = businesses
-        setBusinesses((prev) => prev.filter((b) => b.id !== id))
+const handleDelete = async (id: string) => {
+    setError('')
+    // Optimistic update
+    const prevBusinesses = businesses
+    setBusinesses((prev) => prev.filter((b) => b.id !== id))
 
-        try {
-            const res = await fetch(`${API_BASE_URL}/business/${id}`, {
-                method: 'DELETE',
-                headers: authHeaders(),
-            })
+    try {
+        const res = await fetch(`${API_BASE_URL}/business/${id}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+            body: JSON.stringify({ confirm: true }),   // ← this line is new
+        })
 
-            const data = await res.json()
+        const data = await res.json()
 
-            if (!res.ok || !data.success) {
-                throw new Error(data.message || 'Failed to delete business')
-            }
-
-            await fetchStats()
-        } catch (err) {
-            // Roll back on failure
-            setBusinesses(prevBusinesses)
-            setError(err instanceof Error ? err.message : 'Something went wrong')
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'Failed to delete business')
         }
+
+        await fetchStats()
+    } catch (err) {
+        // Roll back on failure
+        setBusinesses(prevBusinesses)
+        setError(err instanceof Error ? err.message : 'Something went wrong')
     }
+}
 
     const handleUpdate = async (id: string, data: Partial<{ name: string; type: string; address: string; phone: string }>) => {
         setError('')
