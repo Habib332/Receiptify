@@ -58,10 +58,11 @@ async function selectBusiness({ userId, businessId }) {
   return { sessionToken, role: membership.role };
 }
 
+// findUserById's query already excludes password_hash/google_id, so no
+// extra stripping needed here before returning to the controller.
 async function getCurrentUser(userId) {
   const user = await authRepository.findUserById(userId);
   return user;
 }
 
-module.exports = { getCurrentUser };
-module.exports = { register, login, selectBusiness , getCurrentUser };
+module.exports = { register, login, selectBusiness, getCurrentUser };

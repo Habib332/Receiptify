@@ -9,11 +9,18 @@ async function createReceipt({
   receiptDate,
   notes,
   imageUrl,
+  customerName,
+  customerPhone,
+  senderName,
+  bankName,
+  transactionReference,
+  screenshotHash,
 }) {
   const result = await pool.query(
     `INSERT INTO receipts
-       (business_id, uploaded_by, vendor_name, amount, currency, receipt_date, notes, image_url)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (business_id, uploaded_by, vendor_name, amount, currency, receipt_date, notes, image_url,
+        customer_name, customer_phone, sender_name, bank_name, transaction_reference, screenshot_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       businessId,
@@ -24,6 +31,12 @@ async function createReceipt({
       receiptDate,
       notes,
       imageUrl,
+      customerName,
+      customerPhone,
+      senderName,
+      bankName,
+      transactionReference,
+      screenshotHash,
     ],
   );
   return result.rows[0];
@@ -47,7 +60,23 @@ async function getReceiptsByBusiness(businessId) {
 
 async function updateReceipt(
   receiptId,
-  { vendorName, amount, currency, receiptDate, notes, imageUrl },
+  {
+    vendorName,
+    amount,
+    currency,
+    receiptDate,
+    notes,
+    imageUrl,
+    customerName,
+    customerPhone,
+    senderName,
+    bankName,
+    transactionReference,
+    screenshotHash,
+    verificationStatus,
+    duplicateStatus,
+    ocrConfidence,
+  },
 ) {
   const result = await pool.query(
     `UPDATE receipts
@@ -56,10 +85,36 @@ async function updateReceipt(
          currency = COALESCE($4, currency),
          receipt_date = COALESCE($5, receipt_date),
          notes = COALESCE($6, notes),
-         image_url = COALESCE($7, image_url)
+         image_url = COALESCE($7, image_url),
+         customer_name = COALESCE($8, customer_name),
+         customer_phone = COALESCE($9, customer_phone),
+         sender_name = COALESCE($10, sender_name),
+         bank_name = COALESCE($11, bank_name),
+         transaction_reference = COALESCE($12, transaction_reference),
+         screenshot_hash = COALESCE($13, screenshot_hash),
+         verification_status = COALESCE($14, verification_status),
+         duplicate_status = COALESCE($15, duplicate_status),
+         ocr_confidence = COALESCE($16, ocr_confidence)
      WHERE receipt_id = $1
      RETURNING *`,
-    [receiptId, vendorName, amount, currency, receiptDate, notes, imageUrl],
+    [
+      receiptId,
+      vendorName,
+      amount,
+      currency,
+      receiptDate,
+      notes,
+      imageUrl,
+      customerName,
+      customerPhone,
+      senderName,
+      bankName,
+      transactionReference,
+      screenshotHash,
+      verificationStatus,
+      duplicateStatus,
+      ocrConfidence,
+    ],
   );
   return result.rows[0];
 }
@@ -70,6 +125,54 @@ async function deleteReceipt(receiptId) {
     [receiptId],
   );
   return result.rows[0];
+}
+
+// ---- Duplicate detection lookups (PRD 5.6) ----
+
+// Finds existing receipts in the SAME business that share either the
+// transaction reference (strongest signal — same real-world payment) or
+// the screenshot hash (same literal image file re-uploaded). Excludes the
+// receipt's own id so updates don't flag themselves as duplicates of
+// themselves. Scoped to businessId so two different businesses re-using
+// the same bank's reference numbering, or coincidentally similar images,
+// never cross-contaminate each other's duplicate checks.
+async function findPotentialDuplicates({
+  businessId,
+  transactionReference,
+  screenshotHash,
+  excludeReceiptId = null,
+}) {
+  const conditions = ["business_id = $1"];
+  const values = [businessId];
+  const matchConditions = [];
+
+  if (transactionReference) {
+    values.push(transactionReference);
+    matchConditions.push(`transaction_reference = $${values.length}`);
+  }
+
+  if (screenshotHash) {
+    values.push(screenshotHash);
+    matchConditions.push(`screenshot_hash = $${values.length}`);
+  }
+
+  // Nothing to match against — caller didn't provide either signal.
+  if (matchConditions.length === 0) {
+    return [];
+  }
+
+  conditions.push(`(${matchConditions.join(" OR ")})`);
+
+  if (excludeReceiptId) {
+    values.push(excludeReceiptId);
+    conditions.push(`receipt_id <> $${values.length}`);
+  }
+
+  const result = await pool.query(
+    `SELECT * FROM receipts WHERE ${conditions.join(" AND ")}`,
+    values,
+  );
+  return result.rows;
 }
 
 // ---- Stats (feeds business dashboard once this table has real data) ----
@@ -110,14 +213,39 @@ async function getMostUsedBusiness() {
   return result.rows[0]; // undefined if no receipts exist yet anywhere
 }
 
+// Count of receipts still awaiting manual verification — feeds the
+// "Pending Payments" dashboard card (PRD 5.9).
+async function countPendingVerificationByBusiness(businessId) {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM receipts
+     WHERE business_id = $1 AND verification_status = 'pending'`,
+    [businessId],
+  );
+  return result.rows[0].count;
+}
+
+// Count of receipts currently flagged as possible duplicates — feeds the
+// "Duplicate Payments" dashboard card (PRD 5.9).
+async function countFlaggedDuplicatesByBusiness(businessId) {
+  const result = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM receipts
+     WHERE business_id = $1 AND duplicate_status = 'flagged'`,
+    [businessId],
+  );
+  return result.rows[0].count;
+}
+
 module.exports = {
   createReceipt,
   findReceiptById,
   getReceiptsByBusiness,
   updateReceipt,
   deleteReceipt,
+  findPotentialDuplicates,
   countReceiptsByBusiness,
   getTotalSpentByBusiness,
   countAllReceipts,
   getMostUsedBusiness,
+  countPendingVerificationByBusiness,
+  countFlaggedDuplicatesByBusiness,
 };

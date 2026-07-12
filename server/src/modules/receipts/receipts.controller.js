@@ -4,8 +4,25 @@ const receiptsService = require("./receipts.service");
 async function createReceipt(req, res, next) {
   try {
     const { userId, businessId } = req.user; // from sessionToken via auth.middleware
-    const { vendorName, amount, currency, receiptDate, notes, imageUrl } =
-      req.body;
+    const {
+      vendorName,
+      amount,
+      currency,
+      receiptDate,
+      notes,
+      customerName,
+      customerPhone,
+      senderName,
+      bankName,
+      transactionReference,
+    } = req.body;
+
+    // req.file only exists if a "screenshot" field was actually attached
+    // (multer, memoryStorage — see receipts.routes.js) — a receipt can
+    // still be created with no image at all, so all of this is optional.
+    const fileBuffer = req.file ? req.file.buffer : undefined;
+    const originalName = req.file ? req.file.originalname : undefined;
+    const mimeType = req.file ? req.file.mimetype : undefined;
 
     const receipt = await receiptsService.createReceipt({
       businessId,
@@ -15,7 +32,14 @@ async function createReceipt(req, res, next) {
       currency,
       receiptDate,
       notes,
-      imageUrl,
+      fileBuffer,
+      originalName,
+      mimeType,
+      customerName,
+      customerPhone,
+      senderName,
+      bankName,
+      transactionReference,
     });
 
     res.status(201).json({ success: true, data: receipt });
@@ -59,13 +83,34 @@ async function updateReceipt(req, res, next) {
   try {
     const { businessId } = req.user;
     const { receiptId } = req.params;
-    const { vendorName, amount, currency, receiptDate, notes, imageUrl } =
-      req.body;
+    const {
+      vendorName,
+      amount,
+      currency,
+      receiptDate,
+      notes,
+      customerName,
+      customerPhone,
+      senderName,
+      bankName,
+      transactionReference,
+    } = req.body;
 
     const receipt = await receiptsService.updateReceipt({
       receiptId,
       businessId,
-      updates: { vendorName, amount, currency, receiptDate, notes, imageUrl },
+      updates: {
+        vendorName,
+        amount,
+        currency,
+        receiptDate,
+        notes,
+        customerName,
+        customerPhone,
+        senderName,
+        bankName,
+        transactionReference,
+      },
     });
 
     res.status(200).json({ success: true, data: receipt });
@@ -91,6 +136,62 @@ async function deleteReceipt(req, res, next) {
   }
 }
 
+// GET /api/receipts/:receiptId/image-url — returns a fresh, short-lived
+// signed URL for this receipt's screenshot. Call on demand, never cache.
+async function getReceiptImageUrl(req, res, next) {
+  try {
+    const { businessId } = req.user;
+    const { receiptId } = req.params;
+
+    const result = await receiptsService.getReceiptImageUrl({
+      receiptId,
+      businessId,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /api/receipts/:receiptId/verify
+async function setVerificationStatus(req, res, next) {
+  try {
+    const { businessId } = req.user;
+    const { receiptId } = req.params;
+    const { status } = req.body;
+
+    const receipt = await receiptsService.setVerificationStatus({
+      receiptId,
+      businessId,
+      status,
+    });
+
+    res.status(200).json({ success: true, data: receipt });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /api/receipts/:receiptId/resolve-duplicate
+async function resolveDuplicateFlag(req, res, next) {
+  try {
+    const { businessId } = req.user;
+    const { receiptId } = req.params;
+    const { isDuplicate } = req.body;
+
+    const receipt = await receiptsService.resolveDuplicateFlag({
+      receiptId,
+      businessId,
+      isDuplicate,
+    });
+
+    res.status(200).json({ success: true, data: receipt });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/receipts/stats — this business's own stats
 async function getBusinessStats(req, res, next) {
   try {
@@ -110,5 +211,8 @@ module.exports = {
   getReceipt,
   updateReceipt,
   deleteReceipt,
+  getReceiptImageUrl,
+  setVerificationStatus,
+  resolveDuplicateFlag,
   getBusinessStats,
 };

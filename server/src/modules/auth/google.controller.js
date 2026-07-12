@@ -71,22 +71,4 @@ async function exchange(req, res, next) {
   }
 }
 
-async function getMe(req, res, next) {
-  try {
-    const { userId } = req.user;
-
-    const user = await usersService.getCurrentUser(userId);
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    res.status(200).json({ success: true, data: user });
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = { getMe };
-
-module.exports = { redirectToGoogle, handleCallback, exchange , getMe };
+module.exports = { redirectToGoogle, handleCallback, exchange };

@@ -84,6 +84,54 @@ CREATE INDEX IF NOT EXISTS idx_receipts_business_id ON receipts(business_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_uploaded_by ON receipts(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_receipts_receipt_date ON receipts(receipt_date);
 
+
+
+-- ---------------------------------------------------------------------
+-- Receipts extension: payment-verification fields (customer identity,
+-- transaction reference, dedup signals, verification workflow).
+-- Added after the original receipts table + its indexes already existed.
+-- Columns first, THEN constraints, THEN indexes — same ordering rule that
+-- caused the earlier idx_users_google_id / 42703 error, being followed
+-- deliberately this time.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(20);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS sender_name VARCHAR(255);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS transaction_reference VARCHAR(255);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS screenshot_hash VARCHAR(64);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS ocr_confidence NUMERIC(5, 2);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS verification_status VARCHAR(20) NOT NULL DEFAULT 'pending';
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS duplicate_status VARCHAR(20) NOT NULL DEFAULT 'none';
+
+-- CHECK constraints added as guarded DO blocks — a plain
+-- "ADD CONSTRAINT ... CHECK (...)" would throw "constraint already
+-- exists" on a second run of this file, since Postgres has no
+-- "ADD CONSTRAINT IF NOT EXISTS". This makes re-running the file safe.
+DO $$ BEGIN
+    ALTER TABLE receipts ADD CONSTRAINT chk_verification_status
+        CHECK (verification_status IN ('pending', 'verified', 'rejected'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE receipts ADD CONSTRAINT chk_duplicate_status
+        CHECK (duplicate_status IN ('none', 'flagged', 'confirmed_duplicate', 'not_duplicate'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Indexes LAST, now that every column above is guaranteed to exist.
+-- transaction_reference and screenshot_hash are the two dedup lookup
+-- keys (PRD 5.6) — both need to be fast since duplicate checks will run
+-- on every new receipt upload, not just occasionally.
+CREATE INDEX IF NOT EXISTS idx_receipts_transaction_reference ON receipts(transaction_reference);
+CREATE INDEX IF NOT EXISTS idx_receipts_screenshot_hash ON receipts(screenshot_hash);
+CREATE INDEX IF NOT EXISTS idx_receipts_verification_status ON receipts(verification_status);
+
+
+
+
 CREATE INDEX IF NOT EXISTS idx_business_users_user ON business_users(user_id);
 CREATE INDEX IF NOT EXISTS idx_business_users_business ON business_users(business_id);
 
