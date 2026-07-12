@@ -59,10 +59,9 @@ async function selectBusiness({ userId, businessId }) {
 }
 
 async function getCurrentUser(userId) {
-  const user = await usersRepository.findUserById(userId);
+  const user = await authRepository.findUserById(userId);
   return user;
 }
 
 module.exports = { getCurrentUser };
-
 module.exports = { register, login, selectBusiness , getCurrentUser };

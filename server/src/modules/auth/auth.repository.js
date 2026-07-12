@@ -113,6 +113,8 @@ async function consumeExchangeCode(code) {
   return result.rows[0];
 }
 
+
+
 module.exports = {
   createUser,
   findUserByEmail,
