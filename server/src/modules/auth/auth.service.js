@@ -58,4 +58,11 @@ async function selectBusiness({ userId, businessId }) {
   return { sessionToken, role: membership.role };
 }
 
-module.exports = { register, login, selectBusiness };
+async function getCurrentUser(userId) {
+  const user = await usersRepository.findUserById(userId);
+  return user;
+}
+
+module.exports = { getCurrentUser };
+
+module.exports = { register, login, selectBusiness , getCurrentUser };

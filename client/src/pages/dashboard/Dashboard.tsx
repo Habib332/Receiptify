@@ -1,71 +1,133 @@
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
 import Layout from '../../components/Layout'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
-const overviewStats = [
-    {
-        label: 'Total Receipts',
-        value: '128',
-        sub: 'This month',
-        bg: 'bg-blue-50',
-        iconColor: 'text-blue-600',
-        icon: (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Total Amount',
-        value: 'PKR 48,750',
-        sub: 'This month',
-        bg: 'bg-green-50',
-        iconColor: 'text-green-600',
-        icon: (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Categories',
-        value: '12',
-        sub: 'Tracked',
-        bg: 'bg-orange-50',
-        iconColor: 'text-orange-500',
-        icon: (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-            </svg>
-        ),
-    },
-    {
-        label: 'Businesses',
-        value: '8',
-        sub: 'Saved',
-        bg: 'bg-purple-50',
-        iconColor: 'text-purple-500',
-        icon: (
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25M12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
-            </svg>
-        ),
-    },
-]
+type Receipt = {
+    id: string
+    businessId: string
+    businessName: string
+    receiptNumber: string
+    date: string
+    amount: string
+    category: string
+}
 
-const recentActivity = [
-    { receipt: 'IMG_20240710_001', date: '10 Jul 2024', amount: 'PKR 2,450', category: 'Office Supplies', business: 'TechStore' },
-]
+type Business = {
+    id: string
+    name: string
+}
+
+function getToken() {
+    return sessionStorage.getItem('token')
+}
+
+function authHeaders() {
+    const token = getToken()
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+}
 
 export default function Dashboard() {
-    const navigate = useNavigate()
+    const [receipts, setReceipts] = useState<Receipt[]>([])
+    const [businesses, setBusinesses] = useState<Business[]>([])
+    const [selectedBusinessId, setSelectedBusinessId] = useState('all')
+
+    const [loading, setLoading] = useState(false)
+    const [businessesLoading, setBusinessesLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    // Populate the business selector
+    const fetchBusinesses = useCallback(async () => {
+        setBusinessesLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/business`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load businesses')
+            }
+
+            setBusinesses(data.data || [])
+        } catch (err) {
+            // Selector failure shouldn't block the page; surface silently in console
+            console.error(err)
+        } finally {
+            setBusinessesLoading(false)
+        }
+    }, [])
+
+    // Fetch receipts, optionally filtered by businessId
+    const fetchReceipts = useCallback(async () => {
+        setLoading(true)
+        setError('')
+        try {
+            const params = new URLSearchParams()
+            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
+
+            const res = await fetch(`${API_BASE_URL}/receipts?${params.toString()}`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load receipts')
+            }
+
+            setReceipts(data.data || [])
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setLoading(false)
+        }
+    }, [selectedBusinessId])
+
+    useEffect(() => {
+        fetchBusinesses()
+    }, [fetchBusinesses])
+
+    useEffect(() => {
+        fetchReceipts()
+    }, [fetchReceipts])
+
+    const handleDelete = async (id: string) => {
+        setError('')
+        // Optimistic update
+        const prevReceipts = receipts
+        setReceipts((prev) => prev.filter((r) => r.id !== id))
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/receipts/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to delete receipt')
+            }
+        } catch (err) {
+            // Roll back on failure
+            setReceipts(prevReceipts)
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        }
+    }
 
     return (
         <Layout>
             <div className="flex items-start justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Good morning, Hamza! 👋</h1>
-                    <p className="text-sm text-gray-400 mt-1">Let's turn your receipts into useful insights.</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
+                    <p className="text-sm text-gray-400 mt-1">View and manage receipts across your businesses.</p>
                 </div>
                 <button className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors">
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -75,46 +137,40 @@ export default function Dashboard() {
                 </button>
             </div>
 
-            {/* Hero banner */}
-            <div className="bg-blue-50/60 rounded-2xl px-8 py-8 mb-6 flex items-center justify-between overflow-hidden">
-                <div className="max-w-sm">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                        Scan. <span className="text-blue-600">Analyse.</span> Organize.
-                    </h2>
-                    <p className="text-sm text-gray-500 mt-2 mb-5">
-                        Upload receipts, extract important data, and keep your finances in control.
-                    </p>
-                    <button
-                        onClick={() => navigate('/scan')}
-                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 py-2.5"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38 0-.753-.116-1.076-.334a2.32 2.32 0 01-.734-.847 2.29 2.29 0 01-.239-1.089 2.31 2.31 0 01.334-1.076c.19-.319.462-.573.79-.734a2.29 2.29 0 011.089-.239h13.42a2.29 2.29 0 011.089.239c.328.161.6.415.79.734.19.319.316.68.334 1.076a2.29 2.29 0 01-.239 1.089 2.32 2.32 0 01-.734.847 2.31 2.31 0 01-1.076.334 2.31 2.31 0 01-1.641-1.055M6.827 6.175L3.75 20.25h16.5L17.173 6.175M6.827 6.175h10.346" />
-                            <circle cx="12" cy="13" r="2.75" />
-                        </svg>
-                        Scan Receipts
-                    </button>
+            {error && (
+                <div className="mb-4 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    {error}
                 </div>
-                <div className="hidden md:block shrink-0 w-56 h-40 bg-blue-100/70 rounded-xl" />
+            )}
+
+            {/* Business selector */}
+            <div className="flex items-center gap-3 mb-4">
+                <div className="relative">
+                    <select
+                        value={selectedBusinessId}
+                        onChange={(e) => setSelectedBusinessId(e.target.value)}
+                        disabled={businessesLoading}
+                        className="appearance-none border border-gray-200 rounded-lg pl-9 pr-8 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200 bg-white min-w-[220px]"
+                    >
+                        <option value="all">All Receipts</option>
+                        {businesses.map((biz) => (
+                            <option key={biz.id} value={biz.id}>
+                                {biz.name}
+                            </option>
+                        ))}
+                    </select>
+                    <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25M12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                </div>
             </div>
 
-            {/* Overview */}
-            <h3 className="text-base font-bold text-gray-900 mb-3">Overview</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                {overviewStats.map((stat) => (
-                    <div key={stat.label} className="border border-gray-100 rounded-2xl p-4">
-                        <div className={`w-9 h-9 rounded-lg ${stat.bg} ${stat.iconColor} flex items-center justify-center mb-6`}>
-                            {stat.icon}
-                        </div>
-                        <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
-                        <p className="text-xl font-bold text-gray-900">{stat.value}</p>
-                        <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>
-                    </div>
-                ))}
-            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-3">
+                {selectedBusinessId === 'all' ? 'All Receipts' : businesses.find((b) => b.id === selectedBusinessId)?.name ?? 'Receipts'}
+                {' '}({receipts.length})
+            </h3>
 
-            {/* Recent Activity */}
-            <h3 className="text-base font-bold text-gray-900 mb-3">Recent Activity</h3>
+            {/* Receipts table */}
             <div className="border border-gray-100 rounded-2xl overflow-hidden mb-8">
                 <table className="w-full text-sm">
                     <thead>
@@ -128,8 +184,24 @@ export default function Dashboard() {
                         </tr>
                     </thead>
                     <tbody>
-                        {recentActivity.map((row) => (
-                            <tr key={row.receipt} className="hover:bg-gray-50/50 transition-colors">
+                        {loading && receipts.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
+                                    Loading receipts...
+                                </td>
+                            </tr>
+                        )}
+
+                        {!loading && receipts.length === 0 && (
+                            <tr>
+                                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
+                                    No receipts found.
+                                </td>
+                            </tr>
+                        )}
+
+                        {receipts.map((row) => (
+                            <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
                                 <td className="px-5 py-3.5">
                                     <div className="flex items-center gap-2.5">
                                         <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
@@ -137,7 +209,7 @@ export default function Dashboard() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
                                             </svg>
                                         </div>
-                                        <span className="text-gray-700">{row.receipt}</span>
+                                        <span className="text-gray-700">{row.receiptNumber}</span>
                                     </div>
                                 </td>
                                 <td className="px-5 py-3.5 text-gray-500">{row.date}</td>
@@ -147,11 +219,14 @@ export default function Dashboard() {
                                         {row.category}
                                     </span>
                                 </td>
-                                <td className="px-5 py-3.5 text-gray-500">{row.business}</td>
+                                <td className="px-5 py-3.5 text-gray-500">{row.businessName}</td>
                                 <td className="px-5 py-3.5 text-right">
-                                    <button className="text-gray-300 hover:text-gray-500">
-                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M12 6.75a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.75a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 6.75a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                                    <button
+                                        onClick={() => handleDelete(row.id)}
+                                        className="text-gray-300 hover:text-red-500 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                                         </svg>
                                     </button>
                                 </td>

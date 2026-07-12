@@ -1,9 +1,36 @@
-import { type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import MainLogo from '../logo/MainLogo'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
 type Props = {
     children: ReactNode
+}
+
+type CurrentUser = {
+    user_id: number
+    name: string
+    email: string
+    avatar_url: string | null
+}
+
+function getToken() {
+    return sessionStorage.getItem('token')
+}
+
+function authHeaders() {
+    const token = getToken()
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+}
+
+function getInitials(name: string) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 const navItems = [
@@ -28,7 +55,7 @@ const navItems = [
         ),
     },
     {
-        to: '/data',
+        to: '/dashboard',
         label: 'See Data',
         icon: (active: boolean) => (
             <svg
@@ -47,7 +74,7 @@ const navItems = [
         ),
     },
     {
-        to: '/businesses',
+        to: '/select-business',
         label: 'Businesses',
         icon: (active: boolean) => (
             <svg
@@ -68,6 +95,40 @@ const navItems = [
 ]
 
 export default function Layout({ children }: Props) {
+    const [user, setUser] = useState<CurrentUser | null>(null)
+
+    useEffect(() => {
+        let cancelled = false
+
+        async function fetchMe() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/auth/me`, {
+                    method: 'GET',
+                    headers: authHeaders(),
+                })
+
+                const data = await res.json()
+
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || 'Failed to load user')
+                }
+
+                if (!cancelled) setUser(data.data)
+            } catch (err) {
+                // Sidebar shouldn't block the page; surface silently in console
+                console.error(err)
+            }
+        }
+
+        fetchMe()
+        return () => {
+            cancelled = true
+        }
+    }, [])
+
+    const displayName = user?.name ?? 'Loading...'
+    const initials = user?.name ? getInitials(user.name) : '—'
+
     return (
         <div className="h-screen w-full bg-white flex overflow-hidden">
             {/* Sidebar */}
@@ -126,13 +187,17 @@ export default function Layout({ children }: Props) {
                     </NavLink>
 
                     <button className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                            <span className="text-blue-600 text-xs font-semibold">HZ</span>
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 overflow-hidden">
+                            {user?.avatar_url ? (
+                                <img src={user.avatar_url} alt={displayName} className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-blue-600 text-xs font-semibold">{initials}</span>
+                            )}
                         </div>
 
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 truncate">
-                                Hamza Zeeshan
+                                {displayName}
                             </p>
                             <p className="text-xs text-gray-400">View profile</p>
                         </div>

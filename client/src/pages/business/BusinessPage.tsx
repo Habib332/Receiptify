@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Layout from '../../components/Layout'
 import { getBusinessIcon, businessTypes } from './BusinessIcons'
 import AddBusinessModal from './AddBusinessModal'
+import EditBusinessModal from './EditBusinessModal'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 type Business = {
     id: string
@@ -13,45 +16,208 @@ type Business = {
     totalSpent: string
 }
 
-// TODO: replace with data fetched from API
-const initialBusinesses: Business[] = [
-    { id: '1', name: 'Metro Store', type: 'Grocery', address: 'Main Boulevard, Lahore', phone: '+92 300 1234567', receipts: 42, totalSpent: 'PKR 18,750' },
-    { id: '2', name: 'Coffee Corner', type: 'Restaurant', address: 'Johar Town, Lahore', phone: '+92 321 9876543', receipts: 28, totalSpent: 'PKR 12,450' },
-    { id: '3', name: 'Health Plus Pharmacy', type: 'Pharmacy', address: 'Model Town, Lahore', phone: '+92 345 6543210', receipts: 18, totalSpent: 'PKR 6,850' },
-]
+type DashboardStats = {
+    totalBusinesses: number
+    mostUsed: { name: string; receipts: number } | null
+    businessTypeCount: number
+    totalReceipts: number
+}
 
-const overviewStats = [
-    { label: 'Total Businesses', value: '8', sub: 'Saved', bg: 'bg-blue-50', color: 'text-blue-600' },
-    { label: 'Most Used', value: 'Metro Store', sub: '42 receipts', bg: 'bg-green-50', color: 'text-green-600' },
-    { label: 'Business Types', value: '6', sub: 'Categories', bg: 'bg-orange-50', color: 'text-orange-500' },
-    { label: 'Total Receipts', value: '128', sub: 'Across all businesses', bg: 'bg-purple-50', color: 'text-purple-500' },
-]
+function getToken() {
+    return sessionStorage.getItem('token')
+}
+
+function authHeaders() {
+    const token = getToken()
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+}
 
 export default function BusinessesPage() {
-    const [businesses, setBusinesses] = useState<Business[]>(initialBusinesses)
+    const [businesses, setBusinesses] = useState<Business[]>([])
+    const [stats, setStats] = useState<DashboardStats | null>(null)
     const [search, setSearch] = useState('')
     const [typeFilter, setTypeFilter] = useState('All Types')
     const [showAddModal, setShowAddModal] = useState(false)
+    const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
 
-    const filtered = businesses.filter((b) => {
-        const matchesSearch = b.name.toLowerCase().includes(search.toLowerCase())
-        const matchesType = typeFilter === 'All Types' || b.type === typeFilter
-        return matchesSearch && matchesType
-    })
+    const [loading, setLoading] = useState(false)
+    const [statsLoading, setStatsLoading] = useState(false)
+    const [error, setError] = useState('')
 
-    const handleAddBusiness = (data: { name: string; type: string; address: string; phone: string }) => {
-        // TODO: once API is wired, refetch list instead of local insert
-        setBusinesses((prev) => [
-            ...prev,
-            { id: String(Date.now()), receipts: 0, totalSpent: 'PKR 0', ...data },
-        ])
-        setShowAddModal(false)
+    const fetchBusinesses = useCallback(async () => {
+        setLoading(true)
+        setError('')
+        try {
+            const params = new URLSearchParams()
+            if (search) params.set('search', search)
+            if (typeFilter !== 'All Types') params.set('type', typeFilter)
+
+            const res = await fetch(`${API_BASE_URL}/business?${params.toString()}`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load businesses')
+            }
+
+            // Backend returns business_id (raw Postgres column), not id —
+            // map it here so the rest of the component can rely on biz.id.
+            setBusinesses(
+                (data.data || []).map((b: any) => ({
+                    ...b,
+                    id: b.id ?? b.business_id,
+                }))
+            )
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setLoading(false)
+        }
+    }, [search, typeFilter])
+
+    const fetchStats = useCallback(async () => {
+        setStatsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/stats`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load stats')
+            }
+
+            setStats(data.data)
+        } catch (err) {
+            // Stats failure shouldn't block the page; surface silently in console
+            console.error(err)
+        } finally {
+            setStatsLoading(false)
+        }
+    }, [])
+
+    // Debounce search so we don't fire a request on every keystroke
+    useEffect(() => {
+        const handle = setTimeout(() => {
+            fetchBusinesses()
+        }, 300)
+        return () => clearTimeout(handle)
+    }, [fetchBusinesses])
+
+    useEffect(() => {
+        fetchStats()
+    }, [fetchStats])
+
+    const handleAddBusiness = async (data: { name: string; type: string; address: string; phone: string }) => {
+        setError('')
+        try {
+            const res = await fetch(`${API_BASE_URL}/business`, {
+                method: 'POST',
+                headers: authHeaders(),
+                body: JSON.stringify(data),
+            })
+
+            const result = await res.json()
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || 'Failed to add business')
+            }
+
+            setShowAddModal(false)
+            await fetchBusinesses()
+            await fetchStats()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        }
     }
 
-    const handleDelete = (id: string) => {
-        // TODO: call DELETE API
+    const handleDelete = async (id: string) => {
+        setError('')
+        // Optimistic update
+        const prevBusinesses = businesses
         setBusinesses((prev) => prev.filter((b) => b.id !== id))
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to delete business')
+            }
+
+            await fetchStats()
+        } catch (err) {
+            // Roll back on failure
+            setBusinesses(prevBusinesses)
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        }
     }
+
+    const handleUpdate = async (id: string, data: Partial<{ name: string; type: string; address: string; phone: string }>) => {
+        setError('')
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/${id}`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify(data),
+            })
+
+            const result = await res.json()
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || 'Failed to update business')
+            }
+
+            setEditingBusiness(null)
+            await fetchBusinesses()
+            await fetchStats()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        }
+    }
+
+    const overviewStats = [
+        {
+            label: 'Total Businesses',
+            value: statsLoading ? '—' : String(stats?.totalBusinesses ?? businesses.length),
+            sub: 'Saved',
+            bg: 'bg-blue-50',
+            color: 'text-blue-600',
+        },
+        {
+            label: 'Most Used',
+            value: statsLoading ? '—' : stats?.mostUsed?.name ?? '—',
+            sub: stats?.mostUsed ? `${stats.mostUsed.receipts} receipts` : '',
+            bg: 'bg-green-50',
+            color: 'text-green-600',
+        },
+        {
+            label: 'Business Types',
+            value: statsLoading ? '—' : String(stats?.businessTypeCount ?? '—'),
+            sub: 'Categories',
+            bg: 'bg-orange-50',
+            color: 'text-orange-500',
+        },
+        {
+            label: 'Total Receipts',
+            value: statsLoading ? '—' : String(stats?.totalReceipts ?? '—'),
+            sub: 'Across all businesses',
+            bg: 'bg-purple-50',
+            color: 'text-purple-500',
+        },
+    ]
 
     return (
         <Layout>
@@ -67,6 +233,12 @@ export default function BusinessesPage() {
                     <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full" />
                 </button>
             </div>
+
+            {error && (
+                <div className="mb-4 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                    {error}
+                </div>
+            )}
 
             {/* Hero banner */}
             <div className="bg-blue-50/60 rounded-2xl px-8 py-8 mb-6 flex items-center justify-between overflow-hidden">
@@ -151,12 +323,20 @@ export default function BusinessesPage() {
             </div>
 
             <h3 className="text-sm font-bold text-gray-900 mb-3">
-                Available Businesses ({filtered.length})
+                Available Businesses ({businesses.length})
             </h3>
 
             {/* Business list */}
             <div className="border border-gray-100 rounded-2xl divide-y divide-gray-100 mb-4">
-                {filtered.map((biz) => {
+                {loading && businesses.length === 0 && (
+                    <div className="px-5 py-10 text-center text-sm text-gray-400">Loading businesses...</div>
+                )}
+
+                {!loading && businesses.length === 0 && (
+                    <div className="px-5 py-10 text-center text-sm text-gray-400">No businesses found.</div>
+                )}
+
+                {businesses.map((biz) => {
                     const { bg, color, icon } = getBusinessIcon(biz.type)
                     return (
                         <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
@@ -212,7 +392,10 @@ export default function BusinessesPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
                                 </button>
-                                <button className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors">
+                                <button
+                                    onClick={() => setEditingBusiness(biz)}
+                                    className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
+                                >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                                     </svg>
@@ -231,18 +414,16 @@ export default function BusinessesPage() {
                 })}
             </div>
 
-            {/* Load More */}
-            <div className="flex justify-center pb-8">
-                <button className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
-                    Load More
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                    </svg>
-                </button>
-            </div>
-
             {showAddModal && (
                 <AddBusinessModal onClose={() => setShowAddModal(false)} onSave={handleAddBusiness} />
+            )}
+
+            {editingBusiness && (
+                <EditBusinessModal
+                    business={editingBusiness}
+                    onClose={() => setEditingBusiness(null)}
+                    onSave={handleUpdate}
+                />
             )}
         </Layout>
     )
