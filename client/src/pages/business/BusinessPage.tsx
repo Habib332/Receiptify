@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Layout from '../../components/Layout'
 import { getBusinessIcon, businessTypes } from './BusinessIcons'
 import AddBusinessModal from './AddBusinessModal'
 import EditBusinessModal from './EditBusinessModal'
+import ErrorModal from './ErrorModal'
+import BusinessHeroImage from '../../assets/Business.png'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -14,6 +16,7 @@ type Business = {
     phone: string
     receipts: number
     totalSpent: string
+    logoUrl?: string | null
 }
 
 type DashboardStats = {
@@ -35,6 +38,25 @@ function authHeaders() {
     }
 }
 
+// Permission errors (not the owner/manager of a business) come back from
+// the API as 401/403 with messages like "You do not have permission to
+// perform this action" or "Only the owner or manager can...". These are
+// easy to miss as a banner at the top of a long page, so they get routed
+// to a modal instead. We match on status code first (reliable), then fall
+// back to keyword sniffing on the message in case the API sends 400/200.
+function isPermissionError(status: number, message: string) {
+    if (status === 401 || status === 403) return true
+
+    const normalized = message.toLowerCase()
+    return (
+        normalized.includes('permission') ||
+        normalized.includes('not the owner') ||
+        normalized.includes('not authorized') ||
+        normalized.includes('owner or manager') ||
+        normalized.includes('unauthorized')
+    )
+}
+
 export default function BusinessesPage() {
     const [businesses, setBusinesses] = useState<Business[]>([])
     const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -46,6 +68,9 @@ export default function BusinessesPage() {
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
     const [error, setError] = useState('')
+
+    // Permission-style errors get their own modal so they can't be missed.
+    const [permissionError, setPermissionError] = useState('')
 
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
@@ -68,10 +93,12 @@ export default function BusinessesPage() {
 
             // Backend returns business_id (raw Postgres column), not id —
             // map it here so the rest of the component can rely on biz.id.
+            // Also normalize logo_url -> logoUrl for the same reason.
             setBusinesses(
                 (data.data || []).map((b: any) => ({
                     ...b,
                     id: b.id ?? b.business_id,
+                    logoUrl: b.logoUrl ?? b.logo_url ?? null,
                 }))
             )
         } catch (err) {
@@ -116,55 +143,72 @@ export default function BusinessesPage() {
         fetchStats()
     }, [fetchStats])
 
+    // The "Business Types" stat should reflect how many *distinct* types are
+    // actually in use among the user's businesses — not the full static
+    // catalog in BusinessIcons, and not silently blank if the stats API
+    // doesn't return businessTypeCount. We compute this client-side from
+    // the loaded businesses and prefer it, since it's always accurate for
+    // what's currently loaded; the API value is used only if we have no
+    // businesses loaded yet (e.g. right after login, before the list fetch
+    // resolves) so the card doesn't flash 0.
+    const distinctTypeCount = useMemo(() => {
+        const unique = new Set(businesses.map((b) => b.type).filter(Boolean))
+        return unique.size
+    }, [businesses])
+
+    const businessTypeCountDisplay = businesses.length > 0
+        ? distinctTypeCount
+        : stats?.businessTypeCount ?? 0
+
     const handleAddBusiness = async (data: { name: string; type: string; address: string; phone: string }) => {
         setError('')
+        // AddBusinessModal already performed the POST /business (and any
+        // logo upload) itself so it could get the new id for the logo
+        // request. Here we just close the modal and refresh the list/stats.
+        setShowAddModal(false)
+        await fetchBusinesses()
+        await fetchStats()
+    }
+
+    const handleDelete = async (id: string) => {
+        setError('')
+        // Optimistic update
+        const prevBusinesses = businesses
+        setBusinesses((prev) => prev.filter((b) => b.id !== id))
+
         try {
-            const res = await fetch(`${API_BASE_URL}/business`, {
-                method: 'POST',
+            const res = await fetch(`${API_BASE_URL}/business/${id}`, {
+                method: 'DELETE',
                 headers: authHeaders(),
-                body: JSON.stringify(data),
+                body: JSON.stringify({ confirm: true }),
             })
 
-            const result = await res.json()
+            const data = await res.json()
 
-            if (!res.ok || !result.success) {
-                throw new Error(result.message || 'Failed to add business')
+            if (!res.ok || !data.success) {
+                const message = data.message || 'Failed to delete business'
+                // Roll back before deciding how to show the error, so the
+                // list is correct either way.
+                setBusinesses(prevBusinesses)
+
+                if (isPermissionError(res.status, message)) {
+                    setPermissionError(
+                        "You can't delete this business because you're not the owner or manager. Ask an owner or manager to do this instead."
+                    )
+                    return
+                }
+
+                throw new Error(message)
             }
 
-            setShowAddModal(false)
-            await fetchBusinesses()
             await fetchStats()
         } catch (err) {
+            // Roll back on failure (covers network errors; permission-path
+            // above already rolled back and returned early)
+            setBusinesses(prevBusinesses)
             setError(err instanceof Error ? err.message : 'Something went wrong')
         }
     }
-
-const handleDelete = async (id: string) => {
-    setError('')
-    // Optimistic update
-    const prevBusinesses = businesses
-    setBusinesses((prev) => prev.filter((b) => b.id !== id))
-
-    try {
-        const res = await fetch(`${API_BASE_URL}/business/${id}`, {
-            method: 'DELETE',
-            headers: authHeaders(),
-            body: JSON.stringify({ confirm: true }),   // ← this line is new
-        })
-
-        const data = await res.json()
-
-        if (!res.ok || !data.success) {
-            throw new Error(data.message || 'Failed to delete business')
-        }
-
-        await fetchStats()
-    } catch (err) {
-        // Roll back on failure
-        setBusinesses(prevBusinesses)
-        setError(err instanceof Error ? err.message : 'Something went wrong')
-    }
-}
 
     const handleUpdate = async (id: string, data: Partial<{ name: string; type: string; address: string; phone: string }>) => {
         setError('')
@@ -178,7 +222,17 @@ const handleDelete = async (id: string) => {
             const result = await res.json()
 
             if (!res.ok || !result.success) {
-                throw new Error(result.message || 'Failed to update business')
+                const message = result.message || 'Failed to update business'
+
+                if (isPermissionError(res.status, message)) {
+                    setEditingBusiness(null)
+                    setPermissionError(
+                        "You can't edit this business because you're not the owner or manager. Ask an owner or manager to make this change."
+                    )
+                    return
+                }
+
+                throw new Error(message)
             }
 
             setEditingBusiness(null)
@@ -192,7 +246,7 @@ const handleDelete = async (id: string) => {
     const overviewStats = [
         {
             label: 'Total Businesses',
-            value: statsLoading ? '—' : String(stats?.totalBusinesses ?? businesses.length),
+            value: statsLoading && businesses.length === 0 ? '—' : String(stats?.totalBusinesses ?? businesses.length),
             sub: 'Saved',
             bg: 'bg-blue-50',
             color: 'text-blue-600',
@@ -206,7 +260,7 @@ const handleDelete = async (id: string) => {
         },
         {
             label: 'Business Types',
-            value: statsLoading ? '—' : String(stats?.businessTypeCount ?? '—'),
+            value: statsLoading && businesses.length === 0 ? '—' : String(businessTypeCountDisplay),
             sub: 'Categories',
             bg: 'bg-orange-50',
             color: 'text-orange-500',
@@ -260,7 +314,13 @@ const handleDelete = async (id: string) => {
                         Add Business
                     </button>
                 </div>
-                <div className="hidden md:block shrink-0 w-56 h-40 bg-blue-100/70 rounded-xl" />
+                <div className="hidden md:flex shrink-0 w-80 h-56 items-center justify-center">
+                    <img
+                        src={BusinessHeroImage}
+                        alt="Business owner managing businesses"
+                        className="w-full h-full object-contain"
+                    />
+                </div>
             </div>
 
             {/* Overview */}
@@ -341,8 +401,12 @@ const handleDelete = async (id: string) => {
                     const { bg, color, icon } = getBusinessIcon(biz.type)
                     return (
                         <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
-                            <div className={`w-10 h-10 rounded-lg ${bg} ${color} flex items-center justify-center shrink-0`}>
-                                {icon}
+                            <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                {biz.logoUrl ? (
+                                    <img src={biz.logoUrl} alt={`${biz.name} logo`} className="w-full h-full object-cover" />
+                                ) : (
+                                    icon
+                                )}
                             </div>
 
                             <div className="w-48 shrink-0">
@@ -424,6 +488,14 @@ const handleDelete = async (id: string) => {
                     business={editingBusiness}
                     onClose={() => setEditingBusiness(null)}
                     onSave={handleUpdate}
+                />
+            )}
+
+            {permissionError && (
+                <ErrorModal
+                    title="Permission required"
+                    message={permissionError}
+                    onClose={() => setPermissionError('')}
                 />
             )}
         </Layout>

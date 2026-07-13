@@ -1,5 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useRef, type FormEvent } from 'react'
 import { businessTypes } from './BusinessIcons'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+function getToken() {
+    return sessionStorage.getItem('token')
+}
 
 type Business = {
     id: string
@@ -7,6 +13,7 @@ type Business = {
     type: string
     address: string
     phone: string
+    logoUrl?: string | null
 }
 
 type Props = {
@@ -21,6 +28,59 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
     const [address, setAddress] = useState(business.address)
     const [phone, setPhone] = useState(business.phone)
     const [saving, setSaving] = useState(false)
+    const [error, setError] = useState('')
+
+    // Logo starts as whatever the business already has; a freshly picked
+    // file gets its own local preview URL that overrides this until upload
+    // succeeds (then the parent's refetch will replace it with the real URL).
+    const [logoUrl, setLogoUrl] = useState<string | null>(business.logoUrl ?? null)
+    const [logoFile, setLogoFile] = useState<File | null>(null)
+    const [uploadingLogo, setUploadingLogo] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        if (file.size > 5 * 1024 * 1024) {
+            setError('Logo must be 5MB or smaller')
+            return
+        }
+
+        setError('')
+        setLogoFile(file)
+        setLogoUrl(URL.createObjectURL(file))
+        setUploadingLogo(true)
+
+        try {
+            const formData = new FormData()
+            formData.append('logo', file)
+
+            const res = await fetch(`${API_BASE_URL}/business/${business.id}/logo`, {
+                method: 'POST',
+                headers: {
+                    ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+                },
+                body: formData,
+            })
+
+            const result = await res.json()
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || 'Failed to upload logo')
+            }
+
+            // If the API returns the stored URL, prefer it over the local
+            // object URL so we're showing the real, persisted image.
+            if (result.data?.logoUrl) {
+                setLogoUrl(result.data.logoUrl)
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to upload logo')
+        } finally {
+            setUploadingLogo(false)
+        }
+    }
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
@@ -49,7 +109,52 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
                     </button>
                 </div>
 
+                {error && (
+                    <div className="mb-4 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                        {error}
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Logo picker */}
+                    <div className="flex items-center gap-4">
+                        <div className="relative w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                            {logoUrl ? (
+                                <img src={logoUrl} alt="Logo preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 15V8.25A2.25 2.25 0 0015.75 6H8.25A2.25 2.25 0 006 8.25v7.5A2.25 2.25 0 008.25 18h7.5A2.25 2.25 0 0018 15.75z" />
+                                </svg>
+                            )}
+                            {uploadingLogo && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                    </svg>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            <label className="text-xs font-medium text-gray-500 mb-1.5 block">Logo</label>
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploadingLogo}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50"
+                            >
+                                {logoUrl ? 'Replace' : 'Upload'}
+                            </button>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleLogoChange}
+                                className="hidden"
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="text-xs font-medium text-gray-500 mb-1.5 block">Business name</label>
                         <input
