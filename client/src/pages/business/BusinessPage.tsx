@@ -6,6 +6,7 @@ import EditBusinessModal from './EditBusinessModal'
 import ErrorModal from './ErrorModal'
 import JoinBusinessModal from './JoinBusinessModal'
 import TypeFilterDropdown from './TypeFilterDropdown'
+import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -79,6 +80,12 @@ export default function BusinessesPage() {
     // Permission-style errors get their own modal so they can't be missed.
     const [permissionError, setPermissionError] = useState('')
 
+    // Notifications: owners/managers get notified when someone joins their
+    // business. Bell icon opens a modal listing them; badge shows unread count.
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [notifications, setNotifications] = useState<NotificationItem[]>([])
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
+
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
         setError('')
@@ -140,6 +147,41 @@ export default function BusinessesPage() {
         }
     }, [])
 
+    // Fetches the current user's notifications (e.g. "X joined your
+    // business"). Normalizes id/created_at/is_read the same way the other
+    // fetchers normalize raw Postgres columns.
+    const fetchNotifications = useCallback(async () => {
+        setNotificationsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load notifications')
+            }
+
+            setNotifications(
+                (data.data || []).map((n: any) => ({
+                    ...n,
+                    id: n.id ?? n.notification_id,
+                    businessName: n.businessName ?? n.business_name ?? null,
+                    actorName: n.actorName ?? n.actor_name ?? null,
+                    createdAt: n.createdAt ?? n.created_at,
+                    read: n.read ?? n.is_read ?? false,
+                }))
+            )
+        } catch (err) {
+            // Notifications failure shouldn't block the page
+            console.error(err)
+        } finally {
+            setNotificationsLoading(false)
+        }
+    }, [])
+
     // Debounce search so we don't fire a request on every keystroke
     useEffect(() => {
         const handle = setTimeout(() => {
@@ -151,6 +193,14 @@ export default function BusinessesPage() {
     useEffect(() => {
         fetchStats()
     }, [fetchStats])
+
+    // Load notifications on mount and poll periodically so the bell badge
+    // stays current even if the user leaves the tab idle.
+    useEffect(() => {
+        fetchNotifications()
+        const interval = setInterval(fetchNotifications, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifications])
 
     // The "Business Types" stat should reflect how many *distinct* types are
     // actually in use among the user's businesses — not the full static
@@ -168,6 +218,8 @@ export default function BusinessesPage() {
     const businessTypeCountDisplay = businesses.length > 0
         ? distinctTypeCount
         : stats?.businessTypeCount ?? 0
+
+    const unreadNotificationCount = notifications.filter((n) => !n.read).length
 
     const handleAddBusiness = async (data: { name: string; type: string; address: string; phone: string }) => {
         setError('')
@@ -256,6 +308,11 @@ export default function BusinessesPage() {
     // than joining immediately) since it changes the user's membership and
     // is not easily undone from this screen. Role defaults to "staff" on
     // the backend — there is no role picker here on purpose.
+    //
+    // On success, the backend is expected to create a notification for the
+    // business's owner ("X joined your business"). We refresh notifications
+    // here too so that if the current user shares a session with the owner
+    // view (e.g. testing as owner in the same browser), the bell updates.
     const handleJoin = async () => {
         if (!joiningBusiness) return
         setJoinLoading(true)
@@ -285,10 +342,48 @@ export default function BusinessesPage() {
             setJoiningBusiness(null)
             await fetchBusinesses()
             await fetchStats()
+            await fetchNotifications()
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         } finally {
             setJoinLoading(false)
+        }
+    }
+
+    const handleMarkNotificationRead = async (id: string) => {
+        // Optimistic
+        const prev = notifications
+        setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notification as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleMarkAllNotificationsRead = async () => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => ({ ...n, read: true })))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notifications as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
         }
     }
 
@@ -330,11 +425,18 @@ export default function BusinessesPage() {
                     <h1 className="text-2xl font-bold text-gray-900">Businesses</h1>
                     <p className="text-sm text-gray-400 mt-1">Manage all your saved businesses in one place.</p>
                 </div>
-                <button className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors">
+                <button
+                    onClick={() => setShowNotifications(true)}
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
+                >
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                     </svg>
-                    <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                    {unreadNotificationCount > 0 && (
+                        <span className="absolute top-1 right-1.5 min-w-[14px] h-[14px] px-0.5 bg-red-500 rounded-full text-[9px] leading-[14px] text-white text-center">
+                            {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                        </span>
+                    )}
                 </button>
             </div>
 
@@ -554,6 +656,16 @@ export default function BusinessesPage() {
                     title="Permission required"
                     message={permissionError}
                     onClose={() => setPermissionError('')}
+                />
+            )}
+
+            {showNotifications && (
+                <NotificationsModal
+                    notifications={notifications}
+                    loading={notificationsLoading}
+                    onClose={() => setShowNotifications(false)}
+                    onMarkRead={handleMarkNotificationRead}
+                    onMarkAllRead={handleMarkAllNotificationsRead}
                 />
             )}
         </Layout>
