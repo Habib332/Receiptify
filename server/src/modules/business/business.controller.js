@@ -111,6 +111,38 @@ async function uploadLogo(req, res, next) {
   }
 }
 
+async function listBusinesses(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { search, type } = req.query;
+ 
+    const businesses = await businessService.listBusinesses({
+      userId,
+      search,
+      type,
+    });
+ 
+    res.status(200).json({ success: true, data: businesses });
+  } catch (err) {
+    next(err);
+  }
+}
+ 
+// POST /api/business/:businessId/join
+async function joinBusiness(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId } = req.params;
+ 
+    const result = await businessService.joinBusiness({ userId, businessId });
+ 
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+
 module.exports = {
   createBusiness,
   listBusinesses,
@@ -118,4 +150,8 @@ module.exports = {
   updateBusiness,
   deleteBusiness,
   uploadLogo,
+  listBusinesses,
+  joinBusiness,
 };
+
+

@@ -38,4 +38,8 @@ router.post(
   businessController.uploadLogo,
 );
 
+// --- Add to business.routes.js, near the other /:businessId routes ---
+
+router.post("/:businessId/join", authMiddleware, businessController.joinBusiness);
+
 module.exports = router;

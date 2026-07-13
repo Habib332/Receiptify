@@ -1,6 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import MainLogo from '../logo/MainLogo'
+import UserProfileModal from '../pages/profile/UserProfileModal'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -96,6 +97,7 @@ const navItems = [
 
 export default function Layout({ children }: Props) {
     const [user, setUser] = useState<CurrentUser | null>(null)
+    const [showProfileModal, setShowProfileModal] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -186,7 +188,10 @@ export default function Layout({ children }: Props) {
                         About the Creators
                     </NavLink>
 
-                    <button className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                    <button
+                        onClick={() => setShowProfileModal(true)}
+                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                    >
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0 overflow-hidden">
                             {user?.avatar_url ? (
                                 <img src={user.avatar_url} alt={displayName} className="w-full h-full object-cover" />
@@ -223,6 +228,10 @@ export default function Layout({ children }: Props) {
             < main className="flex-1 overflow-y-auto" >
                 <div className="max-w-6xl mx-auto px-8 py-6">{children}</div>
             </main >
+
+            {showProfileModal && (
+                <UserProfileModal onClose={() => setShowProfileModal(false)} />
+            )}
         </div >
     )
 }

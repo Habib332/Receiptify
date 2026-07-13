@@ -4,6 +4,8 @@ import { getBusinessIcon, businessTypes } from './BusinessIcons'
 import AddBusinessModal from './AddBusinessModal'
 import EditBusinessModal from './EditBusinessModal'
 import ErrorModal from './ErrorModal'
+import JoinBusinessModal from './JoinBusinessModal'
+import TypeFilterDropdown from './TypeFilterDropdown'
 import BusinessHeroImage from '../../assets/Business.png'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -17,6 +19,9 @@ type Business = {
     receipts: number
     totalSpent: string
     logoUrl?: string | null
+    // Current user's role for this business ('owner' | 'manager' | 'staff'),
+    // or null if they're not a member yet. Drives whether "Join" shows.
+    userRole?: string | null
 }
 
 type DashboardStats = {
@@ -64,6 +69,8 @@ export default function BusinessesPage() {
     const [typeFilter, setTypeFilter] = useState('All Types')
     const [showAddModal, setShowAddModal] = useState(false)
     const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
+    const [joiningBusiness, setJoiningBusiness] = useState<Business | null>(null)
+    const [joinLoading, setJoinLoading] = useState(false)
 
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
@@ -93,12 +100,14 @@ export default function BusinessesPage() {
 
             // Backend returns business_id (raw Postgres column), not id —
             // map it here so the rest of the component can rely on biz.id.
-            // Also normalize logo_url -> logoUrl for the same reason.
+            // Also normalize logo_url -> logoUrl and user_role -> userRole
+            // for the same reason.
             setBusinesses(
                 (data.data || []).map((b: any) => ({
                     ...b,
                     id: b.id ?? b.business_id,
                     logoUrl: b.logoUrl ?? b.logo_url ?? null,
+                    userRole: b.userRole ?? b.user_role ?? null,
                 }))
             )
         } catch (err) {
@@ -243,6 +252,46 @@ export default function BusinessesPage() {
         }
     }
 
+    // Join flow: clicking "Join" opens a confirmation modal first (rather
+    // than joining immediately) since it changes the user's membership and
+    // is not easily undone from this screen. Role defaults to "staff" on
+    // the backend — there is no role picker here on purpose.
+    const handleJoin = async () => {
+        if (!joiningBusiness) return
+        setJoinLoading(true)
+        setError('')
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/${joiningBusiness.id}/join`, {
+                method: 'POST',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                const message = data.message || 'Failed to join business'
+                setJoiningBusiness(null)
+
+                if (isPermissionError(res.status, message)) {
+                    setPermissionError(message)
+                    return
+                }
+
+                setError(message)
+                return
+            }
+
+            setJoiningBusiness(null)
+            await fetchBusinesses()
+            await fetchStats()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setJoinLoading(false)
+        }
+    }
+
     const overviewStats = [
         {
             label: 'Total Businesses',
@@ -354,23 +403,7 @@ export default function BusinessesPage() {
                     />
                 </div>
 
-                <div className="relative">
-                    <select
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        className="appearance-none border border-gray-200 rounded-lg pl-9 pr-8 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
-                    >
-                        <option>All Types</option>
-                        {businessTypes.map((t) => (
-                            <option key={t} value={t}>
-                                {t}
-                            </option>
-                        ))}
-                    </select>
-                    <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-                    </svg>
-                </div>
+                <TypeFilterDropdown value={typeFilter} options={businessTypes} onChange={setTypeFilter} />
 
                 <button
                     onClick={() => setShowAddModal(true)}
@@ -399,6 +432,11 @@ export default function BusinessesPage() {
 
                 {businesses.map((biz) => {
                     const { bg, color, icon } = getBusinessIcon(biz.type)
+                    // Only show Join when the user has no role at all for this
+                    // business — owners, managers, and existing staff already
+                    // belong, so Join would be meaningless (or worse, a way
+                    // to accidentally re-trigger membership logic) for them.
+                    const hasJoined = !!biz.userRole
                     return (
                         <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
                             <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
@@ -451,11 +489,20 @@ export default function BusinessesPage() {
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
-                                <button className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors">
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    </svg>
+                                <button
+                                    disabled={hasJoined}
+                                    onClick={() => {
+                                        if (!hasJoined) {
+                                            setJoiningBusiness(biz)
+                                        }
+                                    }}
+                                    className={`min-w-[96px] h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors border
+    ${hasJoined
+                                            ? 'bg-white text-blue-600 border-blue-600 cursor-default'
+                                            : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+                                        }`}
+                                >
+                                    {hasJoined ? 'Joined' : 'Join'}
                                 </button>
                                 <button
                                     onClick={() => setEditingBusiness(biz)}
@@ -488,6 +535,17 @@ export default function BusinessesPage() {
                     business={editingBusiness}
                     onClose={() => setEditingBusiness(null)}
                     onSave={handleUpdate}
+                />
+            )}
+
+            {joiningBusiness && (
+                <JoinBusinessModal
+                    businessName={joiningBusiness.name}
+                    loading={joinLoading}
+                    onConfirm={handleJoin}
+                    onClose={() => {
+                        if (!joinLoading) setJoiningBusiness(null)
+                    }}
                 />
             )}
 

@@ -4,11 +4,6 @@ const { uploadBusinessLogo } = require("../../utils/supabaseStorage");
 const ApiError = require("../../utils/apiError");
 
 // Confirms the requesting user is owner/manager OF THIS SPECIFIC business.
-// Deliberately re-checks against business_users rather than trusting
-// req.user.role from the sessionToken, since that role reflects whichever
-// business the user most recently selected — not necessarily the one
-// being modified here (a user can belong to multiple businesses with
-// different roles in each).
 async function assertCanModifyBusiness({ userId, businessId, allowedRoles }) {
   const membership = await businessRepository.getUserRoleForBusiness({
     userId,
@@ -22,7 +17,7 @@ async function assertCanModifyBusiness({ userId, businessId, allowedRoles }) {
   if (!allowedRoles.includes(membership.role)) {
     throw new ApiError(
       403,
-      `Only ${allowedRoles.join(" or ")} can perform this action`,
+      `Only ${allowedRoles.join(" or ")} can perform this action`
     );
   }
 
@@ -38,10 +33,11 @@ async function createBusiness({ userId, name, type, address, phone }) {
     name,
     address,
   });
+
   if (duplicate) {
     throw new ApiError(
       409,
-      "A business with this name and address already exists",
+      "A business with this name and address already exists"
     );
   }
 
@@ -55,15 +51,16 @@ async function createBusiness({ userId, name, type, address, phone }) {
   await businessRepository.linkUserToBusiness({
     businessId: business.business_id,
     userId,
-    role: "owner", // whoever creates a business is always its owner
+    role: "owner",
   });
 
   return business;
 }
 
-// Owner AND manager can update, per project decision.
+// Owner and manager can update
 async function updateBusiness({ userId, businessId, updates }) {
   const existing = await businessRepository.findBusinessById(businessId);
+
   if (!existing) {
     throw new ApiError(404, "Business not found");
   }
@@ -74,19 +71,19 @@ async function updateBusiness({ userId, businessId, updates }) {
     allowedRoles: ["owner", "manager"],
   });
 
-  // If name/address are changing, re-check the duplicate rule against the
-  // new values (skipping the business's own current row).
   if (updates.name || updates.address) {
     const nextName = updates.name ?? existing.name;
     const nextAddress = updates.address ?? existing.address;
+
     const duplicate = await businessRepository.findDuplicateBusiness({
       name: nextName,
       address: nextAddress,
     });
+
     if (duplicate && duplicate.business_id !== Number(businessId)) {
       throw new ApiError(
         409,
-        "A business with this name and address already exists",
+        "A business with this name and address already exists"
       );
     }
   }
@@ -94,14 +91,10 @@ async function updateBusiness({ userId, businessId, updates }) {
   return businessRepository.updateBusiness(businessId, updates);
 }
 
-// Owner ONLY can delete, per project decision. Requires an explicit
-// confirm flag from the caller — this doesn't replace a frontend "Are you
-// sure?" dialog, but it does mean a delete can never happen from a request
-// that didn't deliberately set confirm: true, protecting against e.g. an
-// accidental double-click firing the same request twice without intent,
-// or an integration bug that fires DELETE without a real user action.
+// Owner only can delete
 async function deleteBusiness({ userId, businessId, confirm }) {
   const existing = await businessRepository.findBusinessById(businessId);
+
   if (!existing) {
     throw new ApiError(404, "Business not found");
   }
@@ -115,15 +108,14 @@ async function deleteBusiness({ userId, businessId, confirm }) {
   if (!confirm) {
     throw new ApiError(
       400,
-      "Deletion requires explicit confirmation (confirm: true) — this will also delete all receipts for this business",
+      "Deletion requires explicit confirmation (confirm: true) — this will also delete all receipts for this business"
     );
   }
 
   return businessRepository.deleteBusiness(businessId);
 }
 
-// Owner AND manager can update the logo — same permission level as a
-// general update, since a logo is just another business field.
+// Upload business logo
 async function uploadLogo({
   userId,
   businessId,
@@ -132,6 +124,7 @@ async function uploadLogo({
   mimeType,
 }) {
   const existing = await businessRepository.findBusinessById(businessId);
+
   if (!existing) {
     throw new ApiError(404, "Business not found");
   }
@@ -143,6 +136,7 @@ async function uploadLogo({
   });
 
   let logoUrl;
+
   try {
     logoUrl = await uploadBusinessLogo({
       fileBuffer,
@@ -151,23 +145,46 @@ async function uploadLogo({
       businessId,
     });
   } catch (err) {
-    // uploadBusinessLogo throws plain Errors for validation (bad type/size)
-    // and for Supabase-side failures alike — surface both as a 400, since
-    // from the caller's perspective this request just didn't succeed.
     throw new ApiError(400, err.message);
   }
 
-  return businessRepository.updateBusiness(businessId, { logoUrl });
+  return businessRepository.updateBusiness(businessId, {
+    logoUrl,
+  });
 }
 
-// Powers the "Available Businesses" table + search/filter controls.
-async function listBusinesses({ search, type } = {}) {
-  return businessRepository.getAllBusinesses({ search, type });
+// Available Businesses
+async function listBusinesses({ userId, search, type } = {}) {
+  const businesses = await businessRepository.getAllBusinesses({
+    search,
+    type,
+  });
+
+  if (!businesses.length) {
+    return [];
+  }
+
+  const businessIds = businesses.map((b) => b.business_id);
+
+  const roleMap = await businessRepository.getUserRolesForBusinesses({
+    userId,
+    businessIds,
+  });
+
+  return businesses.map((business) => ({
+    ...business,
+    userRole: roleMap[business.business_id] ?? null,
+  }));
 }
 
-// Powers the 4 stat cards at the top of the dashboard.
+// Dashboard cards
 async function getDashboardStats() {
-  const [totalBusinesses, types, totalReceipts, mostUsed] = await Promise.all([
+  const [
+    totalBusinesses,
+    types,
+    totalReceipts,
+    mostUsed,
+  ] = await Promise.all([
     businessRepository.countAllBusinesses(),
     businessRepository.getDistinctBusinessTypes(),
     receiptsRepository.countAllReceipts(),
@@ -177,7 +194,7 @@ async function getDashboardStats() {
   return {
     totalBusinesses,
     businessTypes: types.length,
-    businessTypesList: types, // handy for the "All Types" filter dropdown too
+    businessTypesList: types,
     totalReceipts,
     mostUsed: mostUsed
       ? {
@@ -185,15 +202,43 @@ async function getDashboardStats() {
           name: mostUsed.name,
           receiptCount: mostUsed.receipt_count,
         }
-      : null, // no receipts anywhere yet
+      : null,
+  };
+}
+
+// Join a business as staff
+async function joinBusiness({ userId, businessId }) {
+  const business = await businessRepository.findBusinessById(businessId);
+
+  if (!business) {
+    throw new ApiError(404, "Business not found");
+  }
+
+  const link = await businessRepository.joinBusinessAsStaff({
+    businessId,
+    userId,
+  });
+
+  if (link.alreadyMember) {
+    throw new ApiError(
+      400,
+      "You are already a member of this business"
+    );
+  }
+
+  return {
+    businessId,
+    role: link.role,
+    joinedAt: link.joined_at,
   };
 }
 
 module.exports = {
   createBusiness,
-  listBusinesses,
-  getDashboardStats,
   updateBusiness,
   deleteBusiness,
   uploadLogo,
+  listBusinesses,
+  getDashboardStats,
+  joinBusiness,
 };

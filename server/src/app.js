@@ -8,6 +8,7 @@ const authRoutes = require("./modules/auth/auth.routes");
 const errorMiddleware = require("./middleware/error.middleware");
 const businessRoutes = require("./modules/business/business.routes");
 const receiptsRoutes = require("./modules/receipts/receipts.routes");
+const userRoutes = require("./modules/users/user.routes");
 const app = express();
 
 // Core middleware
@@ -22,6 +23,8 @@ app.use(cookieParser()); // needed for the short-lived Google OAuth state cookie
 app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/receipts", receiptsRoutes);
+app.use("/api/users", userRoutes);
+
 // Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true, message: "Server is running" });

@@ -134,6 +134,42 @@ async function getDistinctBusinessTypes() {
   return result.rows.map((row) => row.type);
 }
 
+
+// --- Add these to business.model.js ---
+
+// Used by listBusinesses to annotate each row with the current user's role
+// (or null if they're not linked to that business yet) so the frontend can
+// decide whether to show "Join".
+async function getUserRolesForBusinesses({ userId, businessIds }) {
+  if (!businessIds.length) return {};
+  const result = await pool.query(
+    `SELECT business_id, role FROM business_users
+     WHERE user_id = $1 AND business_id = ANY($2::int[])`,
+    [userId, businessIds],
+  );
+  const map = {};
+  for (const row of result.rows) {
+    map[row.business_id] = row.role;
+  }
+  return map;
+}
+
+// Join as staff (default role). Returns the existing link if the user is
+// already a member (idempotent) rather than throwing a duplicate-key error,
+// since a double-click or stale UI shouldn't surface as a 500.
+async function joinBusinessAsStaff({ businessId, userId }) {
+  const existing = await getUserRoleForBusiness({ userId, businessId });
+  if (existing) return { ...existing, alreadyMember: true };
+
+  const result = await pool.query(
+    `INSERT INTO business_users (business_id, user_id, role)
+     VALUES ($1, $2, 'staff')
+     RETURNING business_id, user_id, role, joined_at`,
+    [businessId, userId],
+  );
+  return { ...result.rows[0], alreadyMember: false };
+}
+
 module.exports = {
   createBusiness,
   linkUserToBusiness,
@@ -145,4 +181,6 @@ module.exports = {
   getUserRoleForBusiness,
   updateBusiness,
   deleteBusiness,
+  getUserRolesForBusinesses,
+  joinBusinessAsStaff,
 };
