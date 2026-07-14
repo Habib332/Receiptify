@@ -1,10 +1,31 @@
-import { useState, type FormEvent } from 'react'
+// ScanReview.tsx
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../../components/Layout'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+function getToken() {
+    return sessionStorage.getItem('token')
+}
+
+function authHeaders() {
+    const token = getToken()
+    return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+interface Receipt {
+    receipt_id: number | string
+    vendor_name: string
+    amount: string | number | null
+    currency: string
+    receipt_date: string | null
+    notes: string | null
+    image_url: string | null
+}
+
 type LocationState = {
-    preview?: string
-    fileName?: string
+    receipt?: Receipt
 }
 
 const categoryOptions = [
@@ -17,30 +38,174 @@ const categoryOptions = [
     'Other',
 ]
 
+// Receipts don't have a "category" column on the backend (see
+// receipts.repository.js) — this stays purely local/cosmetic for now and
+// is folded into notes on save so it isn't silently dropped.
+function toDateInputValue(value: string | null | undefined) {
+    if (!value) return ''
+    // receipt_date may come back as a full ISO timestamp; <input type="date">
+    // wants just YYYY-MM-DD
+    return value.slice(0, 10)
+}
+
+// OCR runs fire-and-forget on the backend (runOcrForReceipt is kicked off
+// after POST /receipts already responds) — so the receipt object we get
+// from router state is a snapshot from before OCR finishes. We poll
+// GET /receipts/:id until amount + receipt_date are populated (or we give
+// up) rather than relying on that one-time snapshot forever.
+const POLL_INTERVAL_MS = 2500
+const POLL_TIMEOUT_MS = 30000
+
 export default function ScanReview() {
     const navigate = useNavigate()
     const location = useLocation()
     const state = (location.state as LocationState) || {}
+    const initialReceipt = state.receipt
 
-    // TODO: replace these placeholder defaults with the real values
-    // returned by the OCR/extraction API once it's wired up
-    const [business, setBusiness] = useState('TechStore')
-    const [amount, setAmount] = useState('2450')
-    const [date, setDate] = useState('2024-07-10')
-    const [category, setCategory] = useState('Office Supplies')
-    const [notes, setNotes] = useState('')
+    // If someone lands here directly (refresh, back button) with no
+    // receipt in router state, there's nothing to review — bounce back
+    // to the upload step rather than showing fabricated placeholder data.
+    if (!initialReceipt) {
+        navigate('/scan', { replace: true })
+        return null
+    }
+
+    const [receipt, setReceipt] = useState<Receipt>(initialReceipt)
+    const [polling, setPolling] = useState(
+        initialReceipt.amount == null || initialReceipt.receipt_date == null,
+    )
+    const [pollTimedOut, setPollTimedOut] = useState(false)
+
+    const [business, setBusiness] = useState(initialReceipt.vendor_name || '')
+    const [amount, setAmount] = useState(
+        initialReceipt.amount != null ? String(initialReceipt.amount) : '',
+    )
+    const [date, setDate] = useState(toDateInputValue(initialReceipt.receipt_date))
+    const [category, setCategory] = useState(categoryOptions[0])
+    const [notes, setNotes] = useState(initialReceipt.notes || '')
 
     const [saving, setSaving] = useState(false)
+    const [error, setError] = useState('')
+
+    // Track which fields the user has actually touched, so a poll update
+    // never clobbers something they've already typed over.
+    const touched = useRef({ business: false, amount: false, date: false, notes: false })
+
+    useEffect(() => {
+        if (!polling) return
+
+        let cancelled = false
+        const startedAt = Date.now()
+
+        const tick = async () => {
+            if (cancelled) return
+            try {
+                const res = await fetch(`${API_BASE_URL}/receipts/${receipt.receipt_id}`, {
+                    headers: authHeaders(),
+                })
+                const result = await res.json()
+                if (!res.ok || !result.success) return
+
+                const updated: Receipt = result.data
+                if (cancelled) return
+
+                setReceipt(updated)
+
+                if (!touched.current.business && updated.vendor_name) {
+                    setBusiness(updated.vendor_name)
+                }
+                if (!touched.current.amount && updated.amount != null) {
+                    setAmount(String(updated.amount))
+                }
+                if (!touched.current.date && updated.receipt_date) {
+                    setDate(toDateInputValue(updated.receipt_date))
+                }
+                if (!touched.current.notes && updated.notes) {
+                    setNotes(updated.notes)
+                }
+
+                const stillMissing = updated.amount == null || updated.receipt_date == null
+
+                if (!stillMissing) {
+                    setPolling(false)
+                    return
+                }
+
+                if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
+                    setPolling(false)
+                    setPollTimedOut(true)
+                    return
+                }
+
+                if (!cancelled) {
+                    timer = setTimeout(tick, POLL_INTERVAL_MS)
+                }
+            } catch {
+                // Network blip — keep trying until timeout rather than
+                // giving up on the first failed poll.
+                if (!cancelled && Date.now() - startedAt < POLL_TIMEOUT_MS) {
+                    timer = setTimeout(tick, POLL_INTERVAL_MS)
+                }
+            }
+        }
+
+        let timer = setTimeout(tick, POLL_INTERVAL_MS)
+
+        return () => {
+            cancelled = true
+            clearTimeout(timer)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [polling, receipt.receipt_id])
+
+    const stillProcessing = polling
+    const showTimeoutNotice = pollTimedOut && (amount === '' || !date)
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
+        setError('')
+
+        if (!business.trim()) {
+            setError('Business name is required')
+            return
+        }
+        if (!amount || Number(amount) <= 0) {
+            setError('Enter a valid amount')
+            return
+        }
+        if (!date) {
+            setError('Date is required')
+            return
+        }
+
         setSaving(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/receipts/${receipt.receipt_id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders(),
+                },
+                body: JSON.stringify({
+                    vendorName: business.trim(),
+                    amount: Number(amount),
+                    receiptDate: date,
+                    notes: category ? `[${category}] ${notes.trim()}`.trim() : notes.trim(),
+                }),
+            })
 
-        // TODO: POST { business, amount, date, category, notes, image } to API
-        await new Promise((resolve) => setTimeout(resolve, 600))
+            const result = await res.json()
 
-        setSaving(false)
-        navigate('/')
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || 'Failed to save receipt')
+            }
+
+            navigate('/')
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to save receipt')
+        } finally {
+            setSaving(false)
+        }
     }
 
     return (
@@ -73,8 +238,8 @@ export default function ScanReview() {
                 {/* Receipt preview */}
                 <div>
                     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-gray-50 h-full min-h-[320px] flex items-center justify-center">
-                        {state.preview ? (
-                            <img src={state.preview} alt="Receipt" className="w-full h-full object-contain" />
+                        {receipt.image_url ? (
+                            <img src={receipt.image_url} alt="Receipt" className="w-full h-full object-contain" />
                         ) : (
                             <div className="text-center px-6">
                                 <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -88,19 +253,44 @@ export default function ScanReview() {
 
                 {/* Editable extracted data */}
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-                        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.286z" />
-                        </svg>
-                        We've filled in what we could find. Double check before saving.
-                    </div>
+                    {stillProcessing ? (
+                        <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                            <svg className="w-4 h-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            Reading your receipt — this updates automatically, usually within a few seconds.
+                        </div>
+                    ) : showTimeoutNotice ? (
+                        <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                            Couldn't read this one automatically — please fill in the details below.
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.286z" />
+                            </svg>
+                            We've filled in what we could find. Double check before saving.
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                            {error}
+                        </div>
+                    )}
 
                     <div>
                         <label className="text-xs font-medium text-gray-500 mb-1.5 block">Business</label>
                         <input
                             type="text"
                             value={business}
-                            onChange={(e) => setBusiness(e.target.value)}
+                            onChange={(e) => {
+                                touched.current.business = true
+                                setBusiness(e.target.value)
+                            }}
                             className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200"
                         />
                     </div>
@@ -111,7 +301,10 @@ export default function ScanReview() {
                             <input
                                 type="number"
                                 value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
+                                onChange={(e) => {
+                                    touched.current.amount = true
+                                    setAmount(e.target.value)
+                                }}
                                 className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200"
                             />
                         </div>
@@ -120,7 +313,10 @@ export default function ScanReview() {
                             <input
                                 type="date"
                                 value={date}
-                                onChange={(e) => setDate(e.target.value)}
+                                onChange={(e) => {
+                                    touched.current.date = true
+                                    setDate(e.target.value)
+                                }}
                                 className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200"
                             />
                         </div>
@@ -145,7 +341,10 @@ export default function ScanReview() {
                         <label className="text-xs font-medium text-gray-500 mb-1.5 block">Notes (optional)</label>
                         <textarea
                             value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
+                            onChange={(e) => {
+                                touched.current.notes = true
+                                setNotes(e.target.value)
+                            }}
                             rows={2}
                             placeholder="Add any extra context..."
                             className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400 resize-none"
