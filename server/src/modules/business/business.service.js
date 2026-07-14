@@ -17,7 +17,7 @@ async function assertCanModifyBusiness({ userId, businessId, allowedRoles }) {
   if (!allowedRoles.includes(membership.role)) {
     throw new ApiError(
       403,
-      `Only ${allowedRoles.join(" or ")} can perform this action`
+      `Only ${allowedRoles.join(" or ")} can perform this action`,
     );
   }
 
@@ -37,7 +37,7 @@ async function createBusiness({ userId, name, type, address, phone }) {
   if (duplicate) {
     throw new ApiError(
       409,
-      "A business with this name and address already exists"
+      "A business with this name and address already exists",
     );
   }
 
@@ -83,7 +83,7 @@ async function updateBusiness({ userId, businessId, updates }) {
     if (duplicate && duplicate.business_id !== Number(businessId)) {
       throw new ApiError(
         409,
-        "A business with this name and address already exists"
+        "A business with this name and address already exists",
       );
     }
   }
@@ -108,7 +108,7 @@ async function deleteBusiness({ userId, businessId, confirm }) {
   if (!confirm) {
     throw new ApiError(
       400,
-      "Deletion requires explicit confirmation (confirm: true) — this will also delete all receipts for this business"
+      "Deletion requires explicit confirmation (confirm: true) — this will also delete all receipts for this business",
     );
   }
 
@@ -179,12 +179,7 @@ async function listBusinesses({ userId, search, type } = {}) {
 
 // Dashboard cards
 async function getDashboardStats() {
-  const [
-    totalBusinesses,
-    types,
-    totalReceipts,
-    mostUsed,
-  ] = await Promise.all([
+  const [totalBusinesses, types, totalReceipts, mostUsed] = await Promise.all([
     businessRepository.countAllBusinesses(),
     businessRepository.getDistinctBusinessTypes(),
     receiptsRepository.countAllReceipts(),
@@ -206,32 +201,9 @@ async function getDashboardStats() {
   };
 }
 
-// Join a business as staff
-async function joinBusiness({ userId, businessId }) {
-  const business = await businessRepository.findBusinessById(businessId);
-
-  if (!business) {
-    throw new ApiError(404, "Business not found");
-  }
-
-  const link = await businessRepository.joinBusinessAsStaff({
-    businessId,
-    userId,
-  });
-
-  if (link.alreadyMember) {
-    throw new ApiError(
-      400,
-      "You are already a member of this business"
-    );
-  }
-
-  return {
-    businessId,
-    role: link.role,
-    joinedAt: link.joined_at,
-  };
-}
+// NOTE: the old joinBusiness (instant staff membership, no approval) was
+// removed — replaced by the request/approve flow in
+// businessJoinRequests.service.js. See POST /:businessId/join-requests.
 
 module.exports = {
   createBusiness,
@@ -240,5 +212,4 @@ module.exports = {
   uploadLogo,
   listBusinesses,
   getDashboardStats,
-  joinBusiness,
 };

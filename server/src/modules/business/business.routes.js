@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const router = express.Router();
 const businessController = require("./business.controller");
+const joinRequestsController = require("./businessJoinRequests.controller");
 const authMiddleware = require("../../middleware/auth.middleware");
 
 // In-memory storage: multer just hands us a buffer (req.file.buffer), we
@@ -38,8 +39,31 @@ router.post(
   businessController.uploadLogo,
 );
 
-// --- Add to business.routes.js, near the other /:businessId routes ---
-
-router.post("/:businessId/join", authMiddleware, businessController.joinBusiness);
+// --- Join-request flow (replaces the old instant-join /:businessId/join) ---
+// Requesting to join doesn't require existing membership, so no role check
+// here — ownership of the *review* actions is checked per-business inside
+// businessJoinRequests.service.js (assertCanReviewRequests), same reasoning
+// as PATCH/DELETE above: the sessionToken's role can't be trusted for a
+// business other than the one it was issued for.
+router.post(
+  "/:businessId/join-requests",
+  authMiddleware,
+  joinRequestsController.createJoinRequest,
+);
+router.get(
+  "/:businessId/join-requests",
+  authMiddleware,
+  joinRequestsController.listJoinRequests,
+);
+router.patch(
+  "/:businessId/join-requests/:requestId/approve",
+  authMiddleware,
+  joinRequestsController.approveJoinRequest,
+);
+router.patch(
+  "/:businessId/join-requests/:requestId/reject",
+  authMiddleware,
+  joinRequestsController.rejectJoinRequest,
+);
 
 module.exports = router;
