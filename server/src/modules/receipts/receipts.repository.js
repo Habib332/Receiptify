@@ -249,3 +249,42 @@ module.exports = {
   countPendingVerificationByBusiness,
   countFlaggedDuplicatesByBusiness,
 };
+
+// ---- OCR (PRD 5.4) ----
+
+// Dedicated function rather than folding into the generic updateReceipt —
+// same reasoning as setVerificationStatus/resolveDuplicateFlag: this is a
+// distinct workflow (background OCR processing), not a general edit, so
+// keeping it explicit avoids accidentally overwriting ocr fields from an
+// unrelated PATCH request.
+async function updateOcrResult(
+  receiptId,
+  { ocrStatus, ocrRawText, ocrConfidence },
+) {
+  const result = await pool.query(
+    `UPDATE receipts
+     SET ocr_status = COALESCE($2, ocr_status),
+         ocr_raw_text = COALESCE($3, ocr_raw_text),
+         ocr_confidence = COALESCE($4, ocr_confidence)
+     WHERE receipt_id = $1
+     RETURNING *`,
+    [receiptId, ocrStatus, ocrRawText, ocrConfidence],
+  );
+  return result.rows[0];
+}
+
+module.exports = {
+  createReceipt,
+  findReceiptById,
+  getReceiptsByBusiness,
+  updateReceipt,
+  deleteReceipt,
+  findPotentialDuplicates,
+  countReceiptsByBusiness,
+  getTotalSpentByBusiness,
+  countAllReceipts,
+  getMostUsedBusiness,
+  countPendingVerificationByBusiness,
+  countFlaggedDuplicatesByBusiness,
+  updateOcrResult, // add this line to the existing exports
+};

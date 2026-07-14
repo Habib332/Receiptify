@@ -5,6 +5,10 @@ const {
   getSignedReceiptUrl,
   deleteReceiptScreenshot,
 } = require("../../utils/receiptsStorage");
+const {
+  runTesseractOnImageUrl,
+  parseReceiptFields,
+} = require("../../utils/ocr");
 const ApiError = require("../../utils/apiError");
 
 // Guards against a valid sessionToken for Business A being used to touch
@@ -63,7 +67,7 @@ async function createReceipt({
   currency,
   receiptDate,
   notes,
-  fileBuffer, // raw bytes from multer, if a screenshot was attached — optional
+  fileBuffer,
   originalName,
   mimeType,
   customerName,
@@ -72,8 +76,24 @@ async function createReceipt({
   bankName,
   transactionReference,
 }) {
-  if (!vendorName || !amount || !receiptDate) {
-    throw new ApiError(400, "vendorName, amount, and receiptDate are required");
+  const hasScreenshot = Boolean(fileBuffer);
+
+  // vendorName is always required regardless — OCR isn't reliable enough
+  // to guess "who this receipt is from" the way it can guess a printed
+  // amount or date, so this one stays mandatory either way.
+  if (!vendorName) {
+    throw new ApiError(400, "vendorName is required");
+  }
+
+  // amount/receiptDate are only mandatory on manual entry (no screenshot).
+  // When a screenshot IS attached, OCR is expected to fill these in — so
+  // the request can go through with them blank, and runOcrForReceipt()
+  // will populate them once processing finishes.
+  if (!hasScreenshot && (!amount || !receiptDate)) {
+    throw new ApiError(
+      400,
+      "amount and receiptDate are required when no screenshot is attached",
+    );
   }
 
   // Both the hash and the actual upload only happen if a screenshot was
@@ -121,6 +141,18 @@ async function createReceipt({
     screenshotHash,
   });
 
+  // Fire-and-forget: OCR runs async, request doesn't wait for it. Only
+  // triggered if a screenshot was actually attached — nothing to OCR
+  // otherwise. .catch() here is a safety net on top of the try/catch
+  // already inside runOcrForReceipt itself, in case something throws
+  // before that try block is even reached.
+  if (imageUrl) {
+    runOcrForReceipt({
+      receiptId: receipt.receipt_id,
+      filePath: imageUrl,
+    }).catch((err) => console.error("Unexpected OCR trigger error:", err));
+  }
+
   // Duplicate status can't be set at INSERT time above (schema default is
   // 'none' and we only just computed it), so it's set via a second call
   // when a match was actually found — the common case (no duplicate)
@@ -132,6 +164,78 @@ async function createReceipt({
   }
 
   return receipt;
+}
+
+// Runs in the background — deliberately NOT awaited by createReceipt.
+// Any error here is caught and recorded as ocr_status = 'failed' rather
+// than thrown, since there's no HTTP request left listening for a
+// response by the time this runs.
+async function runOcrForReceipt({ receiptId, filePath }) {
+  try {
+    await receiptsRepository.updateOcrResult(receiptId, {
+      ocrStatus: "pending",
+    });
+
+    const signedUrl = await getSignedReceiptUrl(filePath);
+
+    const { rawText, confidence } = await runTesseractOnImageUrl(signedUrl);
+    const extracted = parseReceiptFields(rawText);
+
+    await receiptsRepository.updateOcrResult(receiptId, {
+      ocrStatus: "completed",
+      ocrRawText: rawText,
+      ocrConfidence: confidence,
+    });
+
+    // Auto-fill: only touches fields the uploader left empty at creation
+    // time. User reviews/edits afterward on the verification screen —
+    // this just saves them typing when OCR already got it right.
+    const current = await receiptsRepository.findReceiptById(receiptId);
+
+    const autoFillUpdates = {};
+
+    if (!current.amount && extracted.amount) {
+      autoFillUpdates.amount = extracted.amount;
+    }
+    if (!current.transaction_reference && extracted.transactionReference) {
+      autoFillUpdates.transactionReference = extracted.transactionReference;
+    }
+    if (!current.bank_name && extracted.bankName) {
+      autoFillUpdates.bankName = extracted.bankName;
+    }
+    if (!current.receipt_date && extracted.date) {
+      autoFillUpdates.receiptDate = extracted.date;
+    }
+
+    if (Object.keys(autoFillUpdates).length > 0) {
+      await receiptsRepository.updateReceipt(receiptId, autoFillUpdates);
+
+      // transactionReference specifically can change the duplicate
+      // picture once filled in — re-run the same dedup check manual
+      // edits already trigger, so OCR-filled receipts get the same
+      // safety net.
+      if (autoFillUpdates.transactionReference) {
+        const { duplicateStatus } = await checkForDuplicates({
+          businessId: current.business_id,
+          transactionReference: autoFillUpdates.transactionReference,
+          screenshotHash: current.screenshot_hash,
+          excludeReceiptId: receiptId,
+        });
+        if (duplicateStatus === "flagged") {
+          await receiptsRepository.updateReceipt(receiptId, {
+            duplicateStatus,
+          });
+        }
+      }
+    }
+
+    return extracted;
+  } catch (err) {
+    console.error(`OCR failed for receipt ${receiptId}:`, err.message);
+    await receiptsRepository.updateOcrResult(receiptId, {
+      ocrStatus: "failed",
+    });
+  }
 }
 
 async function getReceiptsForBusiness(businessId) {
@@ -272,6 +376,7 @@ async function getSystemReceiptStats() {
 
 module.exports = {
   createReceipt,
+  runOcrForReceipt, // exported for a possible future "retry OCR" endpoint
   getReceiptsForBusiness,
   getReceiptById,
   updateReceipt,

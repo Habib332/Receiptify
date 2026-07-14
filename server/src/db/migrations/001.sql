@@ -80,6 +80,10 @@ CREATE TABLE IF NOT EXISTS receipts (
         ON DELETE RESTRICT  -- don't let a receipt lose its uploader if the user is later deleted
 );
 
+ALTER TABLE receipts ALTER COLUMN amount DROP NOT NULL;
+ALTER TABLE receipts ALTER COLUMN receipt_date DROP NOT NULL;
+
+
 CREATE INDEX IF NOT EXISTS idx_receipts_business_id ON receipts(business_id);
 CREATE INDEX IF NOT EXISTS idx_receipts_uploaded_by ON receipts(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_receipts_receipt_date ON receipts(receipt_date);
@@ -163,3 +167,91 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 -- a pre-existing `users` table the column doesn't exist until that
 -- ALTER TABLE runs. This was the cause of the 42703 migration error.
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+
+-- Notifications (PRD 5.14) — in-app only for now. business_id scopes
+-- visibility (RBAC-relevant roles see it), user_id is nullable since some
+-- notifications are business-wide (e.g. "OCR failed on a receipt") rather
+-- than aimed at one specific person.
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id SERIAL PRIMARY KEY,
+    business_id      INTEGER NOT NULL,
+    user_id          INTEGER,              -- nullable: null = visible to all business members with access
+    type             VARCHAR(50) NOT NULL
+                         CHECK (type IN ('ocr_failed', 'duplicate_flagged', 'receipt_verified', 'receipt_rejected')),
+    title            VARCHAR(255) NOT NULL,
+    message          TEXT,
+    related_receipt_id INTEGER,            -- nullable: not every notification type will point at a receipt in the future
+    is_read          BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    CONSTRAINT fk_notification_business
+        FOREIGN KEY (business_id)
+        REFERENCES businesses(business_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_notification_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_notification_receipt
+        FOREIGN KEY (related_receipt_id)
+        REFERENCES receipts(receipt_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_business_id ON notifications(business_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+
+CREATE TABLE IF NOT EXISTS business_join_requests (
+    request_id      SERIAL PRIMARY KEY,
+    business_id     INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    requested_role  VARCHAR(20) NOT NULL CHECK (requested_role IN ('manager', 'staff')),
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    resolved_at     TIMESTAMP WITH TIME ZONE,
+    resolved_by     INTEGER,
+
+    CONSTRAINT fk_join_request_business
+        FOREIGN KEY (business_id)
+        REFERENCES businesses(business_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_join_request_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_join_request_resolved_by
+        FOREIGN KEY (resolved_by)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT unique_pending_request UNIQUE (business_id, user_id, status)
+);
+
+CREATE INDEX IF NOT EXISTS idx_join_requests_business_id ON business_join_requests(business_id);
+CREATE INDEX IF NOT EXISTS idx_join_requests_user_id ON business_join_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_join_requests_status ON business_join_requests(status);
+
+-- Add the new notification type
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+ALTER TABLE notifications ADD CONSTRAINT notifications_type_check
+    CHECK (type IN ('ocr_failed', 'duplicate_flagged', 'receipt_verified', 'receipt_rejected', 'join_request'));
+
+-- New FK column, same pattern as related_receipt_id
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_join_request_id INTEGER;
+
+DO $$ BEGIN
+    ALTER TABLE notifications ADD CONSTRAINT fk_notification_join_request
+        FOREIGN KEY (related_join_request_id)
+        REFERENCES business_join_requests(request_id)
+        ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_notifications_related_join_request_id
+    ON notifications(related_join_request_id);
