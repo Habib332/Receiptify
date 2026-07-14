@@ -1,6 +1,22 @@
-import { useState, useRef, type DragEvent, type ChangeEvent } from 'react'
+import { useState, useEffect, useCallback, useRef, type DragEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../components/Layout'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+function getToken() {
+    return sessionStorage.getItem('token')
+}
+
+function authHeaders() {
+    const token = getToken()
+    return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+interface Business {
+    business_id: number | string
+    name: string
+}
 
 export default function ScanUpload() {
     const navigate = useNavigate()
@@ -9,22 +25,69 @@ export default function ScanUpload() {
 
     const [isDragging, setIsDragging] = useState(false)
     const [preview, setPreview] = useState<string | null>(null)
+    const [file, setFile] = useState<File | null>(null)
     const [fileName, setFileName] = useState('')
     const [error, setError] = useState('')
 
-    const handleFile = (file: File | undefined) => {
-        setError('')
-        if (!file) return
+    const [vendorName, setVendorName] = useState('')
+    const [fieldErrors, setFieldErrors] = useState<{ vendorName?: string; businessId?: string }>({})
+    const [submitting, setSubmitting] = useState(false)
 
-        if (!file.type.startsWith('image/')) {
+    // Business selector — always shown, per product decision. The token
+    // stored from login is the identityToken (no role/businessId claims),
+    // so it's valid for GET /business but NOT for POST /receipts. We only
+    // get a role-bearing sessionToken by calling /auth/select-business,
+    // which we do at submit time using whichever business is selected here.
+    const [businesses, setBusinesses] = useState<Business[]>([])
+    const [businessesLoading, setBusinessesLoading] = useState(false)
+    const [selectedBusinessId, setSelectedBusinessId] = useState<string>('')
+
+    const fetchBusinesses = useCallback(async () => {
+        setBusinessesLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/business`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load businesses')
+            }
+
+            setBusinesses(data.data || [])
+            // Auto-fill the dropdown if there's exactly one option — user
+            // can still change it, this just saves a click in the common case.
+            if (data.data?.length === 1) {
+                setSelectedBusinessId(String(data.data[0].business_id))
+            }
+        } catch (err) {
+            // Selector failure shouldn't block the page; surface silently in console
+            console.error(err)
+        } finally {
+            setBusinessesLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchBusinesses()
+    }, [fetchBusinesses])
+
+    const handleFile = (selected: File | undefined) => {
+        setError('')
+        if (!selected) return
+
+        if (!selected.type.startsWith('image/')) {
             setError('Please upload an image file (JPG, PNG, or HEIC)')
             return
         }
 
-        setFileName(file.name)
+        setFile(selected)
+        setFileName(selected.name)
         const reader = new FileReader()
         reader.onload = () => setPreview(reader.result as string)
-        reader.readAsDataURL(file)
+        reader.readAsDataURL(selected)
     }
 
     const handleDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -37,14 +100,97 @@ export default function ScanUpload() {
         handleFile(e.target.files?.[0])
     }
 
-    const handleContinue = () => {
-        // TODO: send `preview` to backend for OCR/extraction, then navigate with real data
-        navigate('/scan/review', { state: { preview, fileName } })
+    const validate = () => {
+        const errors: typeof fieldErrors = {}
+        if (!vendorName.trim()) {
+            errors.vendorName = 'Vendor name is required'
+        }
+        if (!selectedBusinessId) {
+            errors.businessId = 'Please select a business'
+        }
+        setFieldErrors(errors)
+        return Object.keys(errors).length === 0
+    }
+
+    // Exchanges the identityToken for a role-bearing sessionToken scoped to
+    // the chosen business, and persists it — overwriting whatever token is
+    // currently stored. Returns the fresh sessionToken so the caller can use
+    // it immediately without relying on a state update having landed yet.
+    const selectBusiness = async (businessId: string): Promise<string> => {
+        const res = await fetch(`${API_BASE_URL}/auth/select-business`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders(),
+            },
+            body: JSON.stringify({ businessId }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+            throw new Error(result.message || 'Failed to select business')
+        }
+
+        const sessionToken = result.data?.sessionToken
+        if (!sessionToken) {
+            throw new Error('No session token returned for selected business')
+        }
+
+        sessionStorage.setItem('token', sessionToken)
+        sessionStorage.setItem('businessId', businessId)
+        return sessionToken
+    }
+
+    const handleContinue = async () => {
+        setError('')
+
+        if (!validate()) return
+
+        if (!file) {
+            setError('Please attach a receipt image first')
+            return
+        }
+
+        setSubmitting(true)
+        try {
+            // Get a sessionToken scoped to the selected business before
+            // uploading — POST /receipts requires role/businessId claims
+            // that only exist on the sessionToken, not the identityToken.
+            const sessionToken = await selectBusiness(selectedBusinessId)
+
+            const formData = new FormData()
+            formData.append('screenshot', file)
+            formData.append('vendorName', vendorName.trim())
+
+            const res = await fetch(`${API_BASE_URL}/receipts`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${sessionToken}`,
+                },
+                body: formData,
+            })
+
+            const result = await res.json()
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.message || 'Failed to upload receipt')
+            }
+
+            navigate('/scan/review', { state: { receipt: result.data } })
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to upload receipt')
+        } finally {
+            setSubmitting(false)
+        }
     }
 
     const handleReset = () => {
         setPreview(null)
+        setFile(null)
         setFileName('')
+        setVendorName('')
+        setFieldErrors({})
         setError('')
     }
 
@@ -70,6 +216,32 @@ export default function ScanUpload() {
                     </span>
                     <span className="text-sm font-medium text-gray-400">Review</span>
                 </div>
+            </div>
+
+            {/* Business selector */}
+            <div className="mb-4 max-w-2xl">
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Business</label>
+                <select
+                    value={selectedBusinessId}
+                    onChange={(e) => {
+                        setSelectedBusinessId(e.target.value)
+                        if (fieldErrors.businessId) setFieldErrors((prev) => ({ ...prev, businessId: undefined }))
+                    }}
+                    disabled={businessesLoading}
+                    className={`w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 ${
+                        fieldErrors.businessId ? 'ring-2 ring-red-200' : 'focus:ring-blue-200'
+                    }`}
+                >
+                    <option value="" disabled>
+                        {businessesLoading ? 'Loading businesses...' : 'Select a business'}
+                    </option>
+                    {businesses.map((b) => (
+                        <option key={b.business_id} value={String(b.business_id)}>
+                            {b.name}
+                        </option>
+                    ))}
+                </select>
+                {fieldErrors.businessId && <p className="text-xs text-red-500 mt-1">{fieldErrors.businessId}</p>}
             </div>
 
             {error && (
@@ -166,11 +338,29 @@ export default function ScanUpload() {
                         </div>
                     </div>
 
+                    <div className="mb-4">
+                        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Vendor name</label>
+                        <input
+                            type="text"
+                            value={vendorName}
+                            onChange={(e) => {
+                                setVendorName(e.target.value)
+                                if (fieldErrors.vendorName) setFieldErrors((prev) => ({ ...prev, vendorName: undefined }))
+                            }}
+                            placeholder="e.g. Metro Store"
+                            className={`w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 placeholder:text-gray-400 ${
+                                fieldErrors.vendorName ? 'ring-2 ring-red-200' : 'focus:ring-blue-200'
+                            }`}
+                        />
+                        {fieldErrors.vendorName && <p className="text-xs text-red-500 mt-1">{fieldErrors.vendorName}</p>}
+                    </div>
+
                     <button
                         onClick={handleContinue}
-                        className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg py-3"
+                        disabled={submitting}
+                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-sm font-semibold rounded-lg py-3"
                     >
-                        Continue to review
+                        {submitting ? 'Uploading...' : 'Continue to review'}
                     </button>
                 </div>
             )}

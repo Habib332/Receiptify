@@ -12,6 +12,13 @@ function validate(schema) {
     const { error, value } = schema.validate(req.body, {
       abortEarly: false, // collect all errors, not just the first
       stripUnknown: true, // drop fields not defined in the schema
+      // Exposes request state that isn't a body field to schemas via
+      // Joi.ref("$hasScreenshot") — e.g. createReceipt uses this to make
+      // amount/receiptDate optional when a file was attached (req.file is
+      // set by multer earlier in the route chain, before this runs).
+      context: {
+        hasScreenshot: Boolean(req.file),
+      },
     });
 
     if (error) {

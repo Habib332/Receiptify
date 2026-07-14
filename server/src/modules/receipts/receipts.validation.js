@@ -1,12 +1,32 @@
 const Joi = require("joi");
 
+// amount/receiptDate are conditionally required: mandatory on manual entry,
+// optional when a screenshot is attached (OCR fills them in async — see
+// runOcrForReceipt in receipts.service.js). The branch is driven by Joi
+// context ($hasScreenshot), which validate.middleware.js sets based on
+// whether multer populated req.file — NOT a field in req.body itself.
 const createReceipt = Joi.object({
   vendorName: Joi.string().trim().min(1).max(255).required(),
-  amount: Joi.number().positive().precision(2).required(),
+  amount: Joi.number()
+    .positive()
+    .precision(2)
+    .when(Joi.ref("$hasScreenshot"), {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required(),
+    }),
   currency: Joi.string().trim().uppercase().length(3).default("PKR"),
-  receiptDate: Joi.date().iso().max("now").required().messages({
-    "date.max": "receiptDate cannot be in the future",
-  }),
+  receiptDate: Joi.date()
+    .iso()
+    .max("now")
+    .when(Joi.ref("$hasScreenshot"), {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required(),
+    })
+    .messages({
+      "date.max": "receiptDate cannot be in the future",
+    }),
   notes: Joi.string().trim().max(2000).allow("", null),
   // NOTE: no imageUrl field here — the screenshot is uploaded as a
   // multipart file (field name "screenshot", see receipts.routes.js),
