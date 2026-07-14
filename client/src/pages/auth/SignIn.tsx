@@ -49,6 +49,7 @@ export default function SignIn() {
             if (user) {
                 sessionStorage.setItem('user', JSON.stringify(user))
             }
+            sessionStorage.setItem('businessId', '11')
 
             navigate('/select-business')
         } catch (err) {

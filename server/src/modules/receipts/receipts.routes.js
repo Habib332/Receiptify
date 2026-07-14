@@ -44,7 +44,7 @@ router.get(
 router.post(
   "/",
   authMiddleware,
-  allowRoles("owner", "manager"),
+  allowRoles("owner", "manager", "staff"),
   upload.single("screenshot"),
   validate(createReceipt),
   receiptsController.createReceipt,
