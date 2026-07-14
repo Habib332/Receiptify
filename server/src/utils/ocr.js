@@ -1,97 +1,105 @@
-const { createWorker } = require("tesseract.js");
+const { GoogleGenAI, Type } = require("@google/genai");
+const env = require("../config/env");
 
-// A single shared worker would be faster (avoids re-initializing the
-// Tesseract engine on every receipt), but a fresh worker per call is
-// simpler and safer for a background job that could run concurrently for
-// multiple receipts — no shared-state bugs, no need to manage a pool yet.
-// Revisit if OCR volume becomes high enough that startup cost matters.
-async function runTesseractOnImageUrl(imageUrl) {
-  const worker = await createWorker("eng");
+// Free-tier vision model as of mid-2026 — Pro models require billing
+// (see https://ai.google.dev/pricing), Flash/Flash-Lite remain free with
+// reduced quotas. Pin an explicit version rather than an alias so
+// behavior doesn't shift under us if Google updates the "latest" pointer.
+const MODEL = "gemini-2.5-flash";
 
-  try {
-    const {
-      data: { text, confidence },
-    } = await worker.recognize(imageUrl);
+const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
-    return { rawText: text, confidence }; // confidence is 0-100
-  } finally {
-    // Always terminate, even if recognize() throws, so a failed OCR run
-    // doesn't leak the worker's WASM instance.
-    await worker.terminate();
+// Structured output schema — replaces the old regex extractors entirely.
+// Gemini returns exactly these fields, typed, instead of us parsing free
+// text with brittle patterns. Any field it can't find comes back null
+// rather than guessed, matching the old parseReceiptFields contract.
+const receiptSchema = {
+  type: Type.OBJECT,
+  properties: {
+    amount: {
+      type: Type.NUMBER,
+      nullable: true,
+      description:
+        "The total transaction amount as a plain number, no currency symbols or commas. Null if not visible.",
+    },
+    date: {
+      type: Type.STRING,
+      nullable: true,
+      description:
+        "The transaction/payment date in ISO 8601 format (YYYY-MM-DD). Null if not visible.",
+    },
+    transactionReference: {
+      type: Type.STRING,
+      nullable: true,
+      description:
+        "Transaction ID, reference number, or confirmation number. Null if not visible.",
+    },
+    bankName: {
+      type: Type.STRING,
+      nullable: true,
+      description:
+        "Name of the bank or payment provider (e.g. HBL, UBL, JazzCash, EasyPaisa, SadaPay). Null if not identifiable.",
+    },
+  },
+  required: ["amount", "date", "transactionReference", "bankName"],
+};
+
+const PROMPT = `You are reading a payment/receipt screenshot (bank transfer confirmation, mobile wallet receipt, or similar). Extract the following fields exactly as they appear:
+
+- amount: the total transaction amount, as a plain number (no currency symbol, no commas)
+- date: the transaction date, converted to YYYY-MM-DD format
+- transactionReference: any transaction ID, reference number, or confirmation number shown
+- bankName: the bank or payment provider name, if identifiable
+
+If a field is not visible or not present in the image, return null for it — do not guess or fabricate a value. Only extract what is actually shown in the image.`;
+
+/**
+ * Downloads the image from a (possibly signed, expiring) URL and sends it
+ * to Gemini for structured field extraction. Replaces the old Tesseract
+ * OCR + regex pipeline — no preprocessing needed, Gemini reads the image
+ * directly.
+ *
+ * @param {string} imageUrl - signed URL for the receipt screenshot
+ * @returns {Promise<{amount: number|null, date: string|null, transactionReference: string|null, bankName: string|null}>}
+ */
+async function extractReceiptFields(imageUrl) {
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) {
+    throw new Error(
+      `Failed to download image for OCR: ${imageResponse.status}`,
+    );
   }
-}
+  const arrayBuffer = await imageResponse.arrayBuffer();
+  const base64Image = Buffer.from(arrayBuffer).toString("base64");
+  const mimeType = imageResponse.headers.get("content-type") || "image/png";
 
-// ---- Field extraction heuristics ----
-// Raw OCR text from real payment screenshots (bank apps, wallet
-// confirmations, WhatsApp forwards) has no fixed layout, so these are
-// best-effort regex patterns, not a guarantee. Each one is intentionally
-// isolated so it can be tuned independently once real screenshots reveal
-// what patterns actually show up — nothing here is final.
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: [
+      {
+        inlineData: {
+          mimeType,
+          data: base64Image,
+        },
+      },
+      { text: PROMPT },
+    ],
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: receiptSchema,
+    },
+  });
 
-function extractAmount(text) {
-  // Matches: "Rs 5,000", "Rs. 5000.00", "PKR 12,500", "Amount: 3,200"
-  const match = text.match(
-    /(?:rs\.?|pkr|amount)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i,
-  );
-  if (!match) return null;
-  const numeric = match[1].replace(/,/g, "");
-  const parsed = parseFloat(numeric);
-  return isNaN(parsed) ? null : parsed;
-}
+  const parsed = JSON.parse(response.text);
 
-function extractTransactionReference(text) {
-  // Matches: "TXN ID: 84921730", "Transaction ID 993827", "Ref# ABC123XY",
-  // "Reference No: 1234567890"
-  const match = text.match(
-    /(?:txn\.?\s*id|transaction\s*id|ref(?:erence)?\.?\s*(?:no\.?)?)\s*[:#]?\s*([A-Za-z0-9]{4,})/i,
-  );
-  return match ? match[1] : null;
-}
-
-function extractBankName(text) {
-  // Small known-bank list is more reliable than trying to generically
-  // detect "a bank name" from arbitrary text. Extend this list as real
-  // screenshots come in from your actual users' banks/wallets.
-  const knownBanks = [
-    "HBL",
-    "UBL",
-    "MCB",
-    "Meezan",
-    "Allied Bank",
-    "Bank Alfalah",
-    "Faysal Bank",
-    "JazzCash",
-    "EasyPaisa",
-    "SadaPay",
-    "NayaPay",
-  ];
-
-  const found = knownBanks.find((bank) => new RegExp(bank, "i").test(text));
-  return found || null;
-}
-
-function extractDate(text) {
-  // Matches common formats: 12/07/2026, 12-07-2026, 2026-07-12
-  const match = text.match(
-    /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/,
-  );
-  return match ? match[1] : null;
-}
-
-// Runs all extractors against one block of OCR text. Returns null for any
-// field it couldn't confidently find — caller decides what to do with
-// nulls (e.g. leave the manual-entry fields as the user originally typed
-// them, only use OCR to fill in what's missing).
-function parseReceiptFields(rawText) {
   return {
-    amount: extractAmount(rawText),
-    transactionReference: extractTransactionReference(rawText),
-    bankName: extractBankName(rawText),
-    date: extractDate(rawText),
+    amount: typeof parsed.amount === "number" ? parsed.amount : null,
+    date: parsed.date || null,
+    transactionReference: parsed.transactionReference || null,
+    bankName: parsed.bankName || null,
   };
 }
 
 module.exports = {
-  runTesseractOnImageUrl,
-  parseReceiptFields,
+  extractReceiptFields,
 };

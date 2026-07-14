@@ -255,3 +255,7 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_notifications_related_join_request_id
     ON notifications(related_join_request_id);
+
+    -- migration: drop columns no longer written now that Gemini replaces Tesseract
+ALTER TABLE receipts DROP COLUMN IF EXISTS ocr_raw_text;
+ALTER TABLE receipts DROP COLUMN IF EXISTS ocr_confidence;
