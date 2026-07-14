@@ -8,6 +8,7 @@ const authRoutes = require("./modules/auth/auth.routes");
 const errorMiddleware = require("./middleware/error.middleware");
 const businessRoutes = require("./modules/business/business.routes");
 const receiptsRoutes = require("./modules/receipts/receipts.routes");
+const notificationsRoutes = require("./modules/notifications/notifications.routes");
 const userRoutes = require("./modules/users/user.routes");
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/receipts", receiptsRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

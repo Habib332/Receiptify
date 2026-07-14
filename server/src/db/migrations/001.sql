@@ -232,6 +232,10 @@ CREATE TABLE IF NOT EXISTS business_join_requests (
 
     CONSTRAINT unique_pending_request UNIQUE (business_id, user_id, status)
 );
+alter table business_join_requests DROP CONSTRAINT unique_pending_request;
+CREATE UNIQUE INDEX unique_pending_request_per_user
+  ON business_join_requests (business_id, user_id)
+  WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS idx_join_requests_business_id ON business_join_requests(business_id);
 CREATE INDEX IF NOT EXISTS idx_join_requests_user_id ON business_join_requests(user_id);
