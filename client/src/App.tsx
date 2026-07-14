@@ -6,6 +6,8 @@ import AuthCallback from './pages/auth/AuthCallback';
 import SignIn from './pages/auth/SignIn';
 import SignUp from './pages/auth/SignUp';
 import Dashboard from './pages/dashboard/Dashboard';
+import AboutTheCreatorsPage from './pages/aboutTheCreators/AboutTheCreatorsPage';
+import AboutReceiptifyPage from './pages/aboutReceiptify/AboutReceiptifyPage';
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/select-business" element={<BusinessPage/>} />
         <Route path="/dashboard" element={<Dashboard/>} />
+        <Route path="/about-the-creators" element={<AboutTheCreatorsPage/>} />
+        <Route path="/about-receiptify" element={<AboutReceiptifyPage />} />
       </Routes>
     </Router>
   );
