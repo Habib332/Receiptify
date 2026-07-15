@@ -91,6 +91,43 @@ export default function ScanReview() {
     // never clobbers something they've already typed over.
     const touched = useRef({ business: false, amount: false, date: false, notes: false })
 
+    // The receipt's image_url field (set by the backend) is only ever a
+    // private Supabase Storage PATH — e.g. "42/173-abc.png" — never a
+    // directly-viewable URL. Viewing it requires a short-lived signed URL,
+    // fetched on demand from GET /receipts/:id/image-url and never cached
+    // beyond this component's lifetime (see receiptsStorage.js).
+    const [imageUrl, setImageUrl] = useState<string | null>(null)
+    const [imageError, setImageError] = useState(false)
+
+    useEffect(() => {
+        if (!receipt.image_url) return
+
+        let cancelled = false
+        setImageError(false)
+
+        const fetchImageUrl = async () => {
+            try {
+                const res = await fetch(
+                    `${API_BASE_URL}/receipts/${receipt.receipt_id}/image-url`,
+                    { headers: authHeaders() },
+                )
+                const result = await res.json()
+                if (!res.ok || !result.success) throw new Error()
+                if (!cancelled) setImageUrl(result.data.signedUrl)
+            } catch {
+                if (!cancelled) setImageError(true)
+            }
+        }
+
+        fetchImageUrl()
+
+        return () => {
+            cancelled = true
+        }
+        // Re-fetch if the receipt swaps to a different image (e.g. once
+        // OCR polling below replaces `receipt` with an updated row).
+    }, [receipt.receipt_id, receipt.image_url])
+
     useEffect(() => {
         if (!polling) return
 
@@ -238,14 +275,23 @@ export default function ScanReview() {
                 {/* Receipt preview */}
                 <div>
                     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-gray-50 h-full min-h-[320px] flex items-center justify-center">
-                        {receipt.image_url ? (
-                            <img src={receipt.image_url} alt="Receipt" className="w-full h-full object-contain" />
+                        {imageUrl ? (
+                            <img src={imageUrl} alt="Receipt" className="w-full h-full object-contain" />
+                        ) : receipt.image_url && !imageError ? (
+                            <div className="text-center px-6">
+                                <svg className="w-6 h-6 text-gray-300 mx-auto mb-2 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                                <p className="text-xs text-gray-400">Loading image...</p>
+                            </div>
                         ) : (
                             <div className="text-center px-6">
                                 <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 10.5h.008v.008H18V10.5zm-12-6h12a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 016 4.5z" />
                                 </svg>
-                                <p className="text-xs text-gray-400">No image · go back to upload one</p>
+                                <p className="text-xs text-gray-400">
+                                    {imageError ? "Couldn't load image" : 'No image · go back to upload one'}
+                                </p>
                             </div>
                         )}
                     </div>

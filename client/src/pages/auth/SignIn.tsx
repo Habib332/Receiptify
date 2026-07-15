@@ -50,6 +50,7 @@ export default function SignIn() {
                 sessionStorage.setItem('user', JSON.stringify(user))
             }
 
+
             navigate('/select-business')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
