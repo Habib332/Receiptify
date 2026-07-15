@@ -304,6 +304,49 @@ async function getSystemReceiptStats() {
   };
 }
 
+async function createBulkReceipts({
+  businessId,
+  uploadedBy,
+  files, // array of { buffer, originalname, mimetype }
+  defaultVendorName = "Unknown",
+}) {
+  const total = files.length;
+  const batch = await receiptsRepository.createBatch({
+    businessId,
+    uploadedBy,
+    totalFiles: total,
+  });
+
+  let processed = 0,
+    failed = 0;
+
+  for (const file of files) {
+    try {
+      await createReceipt({
+        businessId,
+        uploadedBy,
+        vendorName: defaultVendorName,
+        fileBuffer: file.buffer,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        // all other fields left null; OCR will fill them
+      });
+      processed++;
+    } catch (err) {
+      console.error(`Bulk: failed to process ${file.originalname}`, err);
+      failed++;
+    }
+  }
+
+  await receiptsRepository.updateBatch(batch.batch_id, {
+    processedFiles: processed,
+    failedFiles: failed,
+    status: failed === total ? "failed" : "completed",
+  });
+
+  return { batchId: batch.batch_id, processed, failed, total };
+}
+
 module.exports = {
   createReceipt,
   runOcrForReceipt,
@@ -317,4 +360,5 @@ module.exports = {
   getBusinessReceiptStats,
   getSystemReceiptStats,
   computeScreenshotHash,
+  createBulkReceipts,
 };

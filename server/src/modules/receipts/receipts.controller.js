@@ -205,6 +205,26 @@ async function getBusinessStats(req, res, next) {
   }
 }
 
+async function createBulkReceipts(req, res, next) {
+  try {
+    const { userId, businessId } = req.user;
+    const files = req.files || [];
+    if (!files.length) {
+      throw new ApiError(400, "No files uploaded");
+    }
+    const { defaultVendorName } = req.body; // optional
+    const result = await receiptsService.createBulkReceipts({
+      businessId,
+      uploadedBy: userId,
+      files,
+      defaultVendorName,
+    });
+    res.status(202).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createReceipt,
   listReceipts,
@@ -214,5 +234,6 @@ module.exports = {
   getReceiptImageUrl,
   setVerificationStatus,
   resolveDuplicateFlag,
+  createBulkReceipts,
   getBusinessStats,
 };

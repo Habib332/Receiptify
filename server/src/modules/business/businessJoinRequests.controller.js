@@ -76,6 +76,8 @@ async function rejectJoinRequest(req, res, next) {
   }
 }
 
+
+
 module.exports = {
   createJoinRequest,
   listJoinRequests,

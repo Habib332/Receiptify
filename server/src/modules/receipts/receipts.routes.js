@@ -84,4 +84,13 @@ router.patch(
   receiptsController.resolveDuplicateFlag,
 );
 
+// Bulk upload – owner/manager only
+router.post(
+  '/bulk',
+  authMiddleware,
+  allowRoles('owner', 'manager'),
+  upload.array('screenshots', 50), // max 50 files per request
+  receiptsController.createBulkReceipts
+);
+
 module.exports = router;

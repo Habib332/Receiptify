@@ -232,10 +232,25 @@ CREATE TABLE IF NOT EXISTS business_join_requests (
 
     CONSTRAINT unique_pending_request UNIQUE (business_id, user_id, status)
 );
-alter table business_join_requests DROP CONSTRAINT unique_pending_request;
-CREATE UNIQUE INDEX unique_pending_request_per_user
+
+ALTER TABLE business_join_requests DROP CONSTRAINT IF EXISTS unique_pending_request;
+CREATE UNIQUE INDEX IF NOT EXISTS unique_pending_request_per_user
   ON business_join_requests (business_id, user_id)
   WHERE status = 'pending';
+
+
+CREATE TABLE IF NOT EXISTS upload_batches (
+  batch_id SERIAL PRIMARY KEY,
+  business_id INTEGER NOT NULL REFERENCES businesses(business_id) ON DELETE CASCADE,
+  uploaded_by INTEGER NOT NULL REFERENCES users(user_id),
+  total_files INTEGER NOT NULL,
+  processed_files INTEGER DEFAULT 0,
+  failed_files INTEGER DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'processing', -- 'processing', 'completed', 'failed'
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 CREATE INDEX IF NOT EXISTS idx_join_requests_business_id ON business_join_requests(business_id);
 CREATE INDEX IF NOT EXISTS idx_join_requests_user_id ON business_join_requests(user_id);
@@ -263,3 +278,4 @@ CREATE INDEX IF NOT EXISTS idx_notifications_related_join_request_id
     -- migration: drop columns no longer written now that Gemini replaces Tesseract
 ALTER TABLE receipts DROP COLUMN IF EXISTS ocr_raw_text;
 ALTER TABLE receipts DROP COLUMN IF EXISTS ocr_confidence;
+
