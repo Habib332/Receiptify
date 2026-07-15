@@ -14,6 +14,7 @@ type CurrentUser = {
     name: string
     email: string
     avatar_url: string | null
+    created_at: string
 }
 
 function getToken() {
@@ -104,20 +105,21 @@ export default function Layout({ children }: Props) {
 
         async function fetchMe() {
             try {
-                const res = await fetch(`${API_BASE_URL}/auth/me`, {
+                const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
                     method: 'GET',
                     headers: authHeaders(),
                 })
 
-                const data = await res.json()
+                const json = await res.json()
 
-                if (!res.ok || !data.success) {
-                    throw new Error(data.message || 'Failed to load user')
+                if (!res.ok || !json.success) {
+                    throw new Error(json.message || 'Failed to load user')
                 }
 
-                if (!cancelled) setUser(data.data)
+                if (!cancelled) {
+                    setUser(json.data.user)
+                }
             } catch (err) {
-                // Sidebar shouldn't block the page; surface silently in console
                 console.error(err)
             }
         }
