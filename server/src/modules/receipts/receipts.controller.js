@@ -4,23 +4,19 @@ const ApiError = require("../../utils/apiError");
 // POST /api/receipts
 async function createReceipt(req, res, next) {
   try {
-    const { userId, businessId } = req.user; // from sessionToken via auth.middleware
+    const { userId, businessId } = req.user;
     const {
-      vendorName,
+      receiverName,
       amount,
       currency,
       receiptDate,
       notes,
       senderName,
       senderBank,
-      receiverName,
       receiverBank,
       transactionReference,
     } = req.body;
 
-    // req.file only exists if a "screenshot" field was actually attached
-    // (multer, memoryStorage — see receipts.routes.js) — a receipt can
-    // still be created with no image at all, so all of this is optional.
     const fileBuffer = req.file ? req.file.buffer : undefined;
     const originalName = req.file ? req.file.originalname : undefined;
     const mimeType = req.file ? req.file.mimetype : undefined;
@@ -28,7 +24,7 @@ async function createReceipt(req, res, next) {
     const receipt = await receiptsService.createReceipt({
       businessId,
       uploadedBy: userId,
-      vendorName,
+      receiverName,
       amount,
       currency,
       receiptDate,
@@ -38,7 +34,6 @@ async function createReceipt(req, res, next) {
       mimeType,
       senderName,
       senderBank,
-      receiverName,
       receiverBank,
       transactionReference,
     });
@@ -49,13 +44,11 @@ async function createReceipt(req, res, next) {
   }
 }
 
-// GET /api/receipts — all receipts for the business in the current session
+// GET /api/receipts
 async function listReceipts(req, res, next) {
   try {
     const { businessId } = req.user;
-
     const receipts = await receiptsService.getReceiptsForBusiness(businessId);
-
     res.status(200).json({ success: true, data: receipts });
   } catch (err) {
     next(err);
@@ -67,12 +60,10 @@ async function getReceipt(req, res, next) {
   try {
     const { businessId } = req.user;
     const { receiptId } = req.params;
-
     const receipt = await receiptsService.getReceiptById({
       receiptId,
       businessId,
     });
-
     res.status(200).json({ success: true, data: receipt });
   } catch (err) {
     next(err);
@@ -85,14 +76,13 @@ async function updateReceipt(req, res, next) {
     const { businessId } = req.user;
     const { receiptId } = req.params;
     const {
-      vendorName,
+      receiverName,
       amount,
       currency,
       receiptDate,
       notes,
       senderName,
       senderBank,
-      receiverName,
       receiverBank,
       transactionReference,
     } = req.body;
@@ -101,14 +91,13 @@ async function updateReceipt(req, res, next) {
       receiptId,
       businessId,
       updates: {
-        vendorName,
+        receiverName,
         amount,
         currency,
         receiptDate,
         notes,
         senderName,
         senderBank,
-        receiverName,
         receiverBank,
         transactionReference,
       },
@@ -125,30 +114,25 @@ async function deleteReceipt(req, res, next) {
   try {
     const { businessId } = req.user;
     const { receiptId } = req.params;
-
     const result = await receiptsService.deleteReceipt({
       receiptId,
       businessId,
     });
-
     res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
 }
 
-// GET /api/receipts/:receiptId/image-url — returns a fresh, short-lived
-// signed URL for this receipt's screenshot. Call on demand, never cache.
+// GET /api/receipts/:receiptId/image-url
 async function getReceiptImageUrl(req, res, next) {
   try {
     const { businessId } = req.user;
     const { receiptId } = req.params;
-
     const result = await receiptsService.getReceiptImageUrl({
       receiptId,
       businessId,
     });
-
     res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -161,13 +145,11 @@ async function setVerificationStatus(req, res, next) {
     const { businessId } = req.user;
     const { receiptId } = req.params;
     const { status } = req.body;
-
     const receipt = await receiptsService.setVerificationStatus({
       receiptId,
       businessId,
       status,
     });
-
     res.status(200).json({ success: true, data: receipt });
   } catch (err) {
     next(err);
@@ -180,53 +162,43 @@ async function resolveDuplicateFlag(req, res, next) {
     const { businessId } = req.user;
     const { receiptId } = req.params;
     const { isDuplicate } = req.body;
-
     const receipt = await receiptsService.resolveDuplicateFlag({
       receiptId,
       businessId,
       isDuplicate,
     });
-
     res.status(200).json({ success: true, data: receipt });
   } catch (err) {
     next(err);
   }
 }
 
-// GET /api/receipts/stats — this business's own stats
+// GET /api/receipts/stats
 async function getBusinessStats(req, res, next) {
   try {
     const { businessId } = req.user;
-
     const stats = await receiptsService.getBusinessReceiptStats(businessId);
-
     res.status(200).json({ success: true, data: stats });
   } catch (err) {
     next(err);
   }
 }
 
-// POST /api/receipts/bulk — multipart/form-data, field name "screenshots"
-// (array, up to 50 — see receipts.routes.js). Responds 202 immediately;
-// files are processed in the background (see receipts.service.js).
+// POST /api/receipts/bulk
 async function createBulkReceipts(req, res, next) {
   try {
     const { userId, businessId } = req.user;
     const files = req.files || [];
-
     if (!files.length) {
       throw new ApiError(400, "No files uploaded");
     }
-
-    const { defaultVendorName } = req.body; // optional
-
+    const { defaultReceiverName } = req.body;
     const result = await receiptsService.createBulkReceipts({
       businessId,
       uploadedBy: userId,
       files,
-      defaultVendorName,
+      defaultReceiverName,
     });
-
     res.status(202).json({ success: true, data: result });
   } catch (err) {
     next(err);

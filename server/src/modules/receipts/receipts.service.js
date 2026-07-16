@@ -49,7 +49,7 @@ async function checkForDuplicates({
 async function createReceipt({
   businessId,
   uploadedBy,
-  vendorName,
+  receiverName, // required
   amount,
   currency,
   receiptDate,
@@ -59,14 +59,13 @@ async function createReceipt({
   mimeType,
   senderName,
   senderBank,
-  receiverName,
   receiverBank,
   transactionReference,
 }) {
   const hasScreenshot = Boolean(fileBuffer);
 
-  if (!vendorName) {
-    throw new ApiError(400, "vendorName is required");
+  if (!receiverName) {
+    throw new ApiError(400, "receiverName is required");
   }
 
   if (!hasScreenshot && (!amount || !receiptDate)) {
@@ -98,7 +97,7 @@ async function createReceipt({
   const receipt = await receiptsRepository.createReceipt({
     businessId,
     uploadedBy,
-    vendorName,
+    receiverName,
     amount,
     currency: currency || "PKR",
     receiptDate,
@@ -106,7 +105,6 @@ async function createReceipt({
     imageUrl,
     senderName,
     senderBank,
-    receiverName,
     receiverBank,
     transactionReference,
     screenshotHash,
@@ -128,11 +126,7 @@ async function createReceipt({
   return receipt;
 }
 
-// Runs in the background — deliberately NOT awaited by createReceipt.
-// Gemini structured extraction (see utils/ocr.js) returns senderName/
-// senderBank/receiverName/receiverBank instead of the old single
-// bankName field — auto-fill mirrors that same four-way split. No more
-// ocrRawText/confidence fields since Gemini returns typed JSON directly.
+// Runs in the background
 async function runOcrForReceipt({ receiptId, filePath }) {
   try {
     await receiptsRepository.updateOcrResult(receiptId, {
@@ -314,17 +308,11 @@ async function getSystemReceiptStats() {
   };
 }
 
-// Sequential on purpose (not Promise.all) — each call already fires its
-// own background OCR job (see createReceipt); running 50 of those
-// concurrently on top of 50 concurrent uploads would spike Gemini API
-// concurrency and Supabase Storage writes at once. Bulk upload already
-// responds 202 immediately (see receipts.controller.js), so the caller
-// isn't blocked waiting on this loop either way.
 async function createBulkReceipts({
   businessId,
   uploadedBy,
-  files, // array of { buffer, originalname, mimetype }
-  defaultVendorName = "Unknown",
+  files,
+  defaultReceiverName = "Unknown",
 }) {
   const total = files.length;
   const batch = await receiptsRepository.createBatch({
@@ -341,7 +329,7 @@ async function createBulkReceipts({
       await createReceipt({
         businessId,
         uploadedBy,
-        vendorName: defaultVendorName,
+        receiverName: defaultReceiverName,
         fileBuffer: file.buffer,
         originalName: file.originalname,
         mimeType: file.mimetype,
