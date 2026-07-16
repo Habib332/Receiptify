@@ -1,0 +1,25 @@
+{
+  "name": "receiptify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Habib332/Receiptify.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Habib332/Receiptify/issues"
+  },
+  "homepage": "https://github.com/Habib332/Receiptify#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
