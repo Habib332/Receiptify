@@ -7,14 +7,11 @@ const Joi = require("joi");
 // whether multer populated req.file — NOT a field in req.body itself.
 const createReceipt = Joi.object({
   vendorName: Joi.string().trim().min(1).max(255).required(),
-  amount: Joi.number()
-    .positive()
-    .precision(2)
-    .when(Joi.ref("$hasScreenshot"), {
-      is: true,
-      then: Joi.optional(),
-      otherwise: Joi.required(),
-    }),
+  amount: Joi.number().positive().precision(2).when(Joi.ref("$hasScreenshot"), {
+    is: true,
+    then: Joi.optional(),
+    otherwise: Joi.required(),
+  }),
   currency: Joi.string().trim().uppercase().length(3).default("PKR"),
   receiptDate: Joi.date()
     .iso()
@@ -34,12 +31,15 @@ const createReceipt = Joi.object({
   // validates req.body; the file itself is validated separately by
   // multer's limits + receiptsStorage.js's MIME/size checks.
 
-  // Payment-verification fields — all optional for now since none of them
-  // are populated by OCR yet; manual entry until that's built.
-  customerName: Joi.string().trim().max(255).allow("", null),
-  customerPhone: Joi.string().trim().max(20).allow("", null),
+  // Payment-verification fields — customerName/customerPhone removed
+  // (column dropped from schema); bankName split into senderBank/
+  // receiverBank, receiverName added — matches the current receipts
+  // table and ocr.js's extractReceiptFields output. All optional since
+  // OCR can fill them in async when a screenshot is attached.
   senderName: Joi.string().trim().max(255).allow("", null),
-  bankName: Joi.string().trim().max(100).allow("", null),
+  senderBank: Joi.string().trim().max(100).allow("", null),
+  receiverName: Joi.string().trim().max(255).allow("", null),
+  receiverBank: Joi.string().trim().max(100).allow("", null),
   transactionReference: Joi.string().trim().max(255).allow("", null),
 });
 
@@ -56,10 +56,10 @@ const updateReceipt = Joi.object({
   }),
   notes: Joi.string().trim().max(2000).allow("", null),
 
-  customerName: Joi.string().trim().max(255).allow("", null),
-  customerPhone: Joi.string().trim().max(20).allow("", null),
   senderName: Joi.string().trim().max(255).allow("", null),
-  bankName: Joi.string().trim().max(100).allow("", null),
+  senderBank: Joi.string().trim().max(100).allow("", null),
+  receiverName: Joi.string().trim().max(255).allow("", null),
+  receiverBank: Joi.string().trim().max(100).allow("", null),
   transactionReference: Joi.string().trim().max(255).allow("", null),
 }).min(1);
 

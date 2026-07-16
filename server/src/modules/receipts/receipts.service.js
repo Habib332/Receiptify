@@ -57,10 +57,10 @@ async function createReceipt({
   fileBuffer,
   originalName,
   mimeType,
-  customerName,
-  customerPhone,
   senderName,
-  bankName,
+  senderBank,
+  receiverName,
+  receiverBank,
   transactionReference,
 }) {
   const hasScreenshot = Boolean(fileBuffer);
@@ -104,10 +104,10 @@ async function createReceipt({
     receiptDate,
     notes,
     imageUrl,
-    customerName,
-    customerPhone,
     senderName,
-    bankName,
+    senderBank,
+    receiverName,
+    receiverBank,
     transactionReference,
     screenshotHash,
   });
@@ -129,9 +129,10 @@ async function createReceipt({
 }
 
 // Runs in the background — deliberately NOT awaited by createReceipt.
-// Switched from Tesseract+regex to Gemini structured extraction. No more
-// ocrRawText/confidence fields since Gemini returns typed JSON directly —
-// there's no raw text blob or confidence score to persist anymore.
+// Gemini structured extraction (see utils/ocr.js) returns senderName/
+// senderBank/receiverName/receiverBank instead of the old single
+// bankName field — auto-fill mirrors that same four-way split. No more
+// ocrRawText/confidence fields since Gemini returns typed JSON directly.
 async function runOcrForReceipt({ receiptId, filePath }) {
   try {
     await receiptsRepository.updateOcrResult(receiptId, {
@@ -156,8 +157,17 @@ async function runOcrForReceipt({ receiptId, filePath }) {
     if (!current.transaction_reference && extracted.transactionReference) {
       autoFillUpdates.transactionReference = extracted.transactionReference;
     }
-    if (!current.bank_name && extracted.bankName) {
-      autoFillUpdates.bankName = extracted.bankName;
+    if (!current.sender_name && extracted.senderName) {
+      autoFillUpdates.senderName = extracted.senderName;
+    }
+    if (!current.sender_bank && extracted.senderBank) {
+      autoFillUpdates.senderBank = extracted.senderBank;
+    }
+    if (!current.receiver_name && extracted.receiverName) {
+      autoFillUpdates.receiverName = extracted.receiverName;
+    }
+    if (!current.receiver_bank && extracted.receiverBank) {
+      autoFillUpdates.receiverBank = extracted.receiverBank;
     }
     if (!current.receipt_date && extracted.date) {
       autoFillUpdates.receiptDate = extracted.date;
@@ -304,6 +314,12 @@ async function getSystemReceiptStats() {
   };
 }
 
+// Sequential on purpose (not Promise.all) — each call already fires its
+// own background OCR job (see createReceipt); running 50 of those
+// concurrently on top of 50 concurrent uploads would spike Gemini API
+// concurrency and Supabase Storage writes at once. Bulk upload already
+// responds 202 immediately (see receipts.controller.js), so the caller
+// isn't blocked waiting on this loop either way.
 async function createBulkReceipts({
   businessId,
   uploadedBy,

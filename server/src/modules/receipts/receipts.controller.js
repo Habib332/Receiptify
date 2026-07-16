@@ -1,4 +1,5 @@
 const receiptsService = require("./receipts.service");
+const ApiError = require("../../utils/apiError");
 
 // POST /api/receipts
 async function createReceipt(req, res, next) {
@@ -10,10 +11,10 @@ async function createReceipt(req, res, next) {
       currency,
       receiptDate,
       notes,
-      customerName,
-      customerPhone,
       senderName,
-      bankName,
+      senderBank,
+      receiverName,
+      receiverBank,
       transactionReference,
     } = req.body;
 
@@ -35,10 +36,10 @@ async function createReceipt(req, res, next) {
       fileBuffer,
       originalName,
       mimeType,
-      customerName,
-      customerPhone,
       senderName,
-      bankName,
+      senderBank,
+      receiverName,
+      receiverBank,
       transactionReference,
     });
 
@@ -89,10 +90,10 @@ async function updateReceipt(req, res, next) {
       currency,
       receiptDate,
       notes,
-      customerName,
-      customerPhone,
       senderName,
-      bankName,
+      senderBank,
+      receiverName,
+      receiverBank,
       transactionReference,
     } = req.body;
 
@@ -105,10 +106,10 @@ async function updateReceipt(req, res, next) {
         currency,
         receiptDate,
         notes,
-        customerName,
-        customerPhone,
         senderName,
-        bankName,
+        senderBank,
+        receiverName,
+        receiverBank,
         transactionReference,
       },
     });
@@ -205,20 +206,27 @@ async function getBusinessStats(req, res, next) {
   }
 }
 
+// POST /api/receipts/bulk — multipart/form-data, field name "screenshots"
+// (array, up to 50 — see receipts.routes.js). Responds 202 immediately;
+// files are processed in the background (see receipts.service.js).
 async function createBulkReceipts(req, res, next) {
   try {
     const { userId, businessId } = req.user;
     const files = req.files || [];
+
     if (!files.length) {
       throw new ApiError(400, "No files uploaded");
     }
+
     const { defaultVendorName } = req.body; // optional
+
     const result = await receiptsService.createBulkReceipts({
       businessId,
       uploadedBy: userId,
       files,
       defaultVendorName,
     });
+
     res.status(202).json({ success: true, data: result });
   } catch (err) {
     next(err);
