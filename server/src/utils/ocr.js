@@ -72,17 +72,263 @@ const receiptSchema = {
   ],
 };
 
-const PROMPT = `You are reading a payment/receipt screenshot (bank transfer confirmation, mobile wallet receipt, or similar). Extract the following fields exactly as they appear:
+// Kept broad and pattern-based rather than tied to one bank's layout —
+// screenshots come from many different banks/wallets (HBL, UBL, Meezan,
+// MCB, Faysal, Alfalah, JazzCash, EasyPaisa, SadaPay, NayaPay,
+// etc.) and each labels sender/receiver differently. Earlier version of
+// this prompt was too generic and the model sometimes only read one
+// side of a two-account layout — this version explicitly enumerates the
+// label variants and the "two account blocks" layout so it doesn't skip
+// the second one.
+const PROMPT = `
+You are an expert OCR and payment receipt parser.
 
-- amount: the total transaction amount, as a plain number (no currency symbol, no commas)
-- date: the transaction date, converted to YYYY-MM-DD format
-- transactionReference: any transaction ID, reference number, or confirmation number shown
-- senderName: the name of the person/account who sent the money (the payer)
-- senderBank: the bank or payment provider the money was sent FROM
-- receiverName: the name of the person/account/business who received the money (the payee)
-- receiverBank: the bank or payment provider the money was sent TO
+Your task is to accurately extract structured information from Pakistani bank transfer receipts, mobile wallet receipts, IBFT confirmations, RAAST transfers, internet banking receipts, ATM receipts and payment confirmations.
 
-Many screenshots clearly show the sender's details but not the receiver's (or vice versa) — that is normal. If a field is not visible or not present in the image, return null for it — do not guess or fabricate a value. Only extract what is actually shown in the image.`;
+Return ONLY information that is actually visible in the image.
+
+------------------------
+FIELDS
+------------------------
+
+Extract:
+
+• amount
+• date
+• transactionReference
+• senderName
+• senderBank
+• receiverName
+• receiverBank
+
+If any field cannot be determined confidently, return null.
+
+Never invent information.
+
+------------------------
+AMOUNT
+------------------------
+
+Extract ONLY the transferred amount.
+
+Return it as a plain number.
+
+Examples:
+
+Rs. 1,500.00
+PKR 1500
+1,500
+
+↓
+
+1500
+
+------------------------
+DATE
+------------------------
+
+Convert every date into
+
+YYYY-MM-DD
+
+Examples:
+
+25 Jun 2026
+25-06-2026
+06/25/2026
+
+↓
+
+2026-06-25
+
+If no date exists return null.
+
+------------------------
+TRANSACTION REFERENCE
+------------------------
+
+Look for fields such as
+
+Transaction ID
+Reference
+Reference Number
+RRN
+STAN
+Confirmation Number
+Txn ID
+IBFT Reference
+RAAST Reference
+Trace Number
+
+Return the value exactly.
+
+------------------------
+SENDER
+------------------------
+
+The sender is the account money came FROM.
+
+Possible labels include:
+
+From
+From Account
+Sender
+Paid By
+Debit Account
+Debit From
+Account Holder
+
+Extract ONLY the person's/business's name.
+
+Never extract account numbers.
+
+------------------------
+RECEIVER
+------------------------
+
+The receiver is the account money went TO.
+
+Possible labels include:
+
+To
+To Account
+Receiver
+Beneficiary
+Recipient
+Paid To
+Credit Account
+
+Extract ONLY the person's/business's name.
+
+Never extract account numbers.
+
+------------------------
+BANK IDENTIFICATION
+------------------------
+
+This is extremely important.
+
+A bank/provider may appear in ANY of these ways:
+
+• full text
+• partial text
+• logo
+• app branding
+• header
+• footer
+• account card
+• colored icon
+• watermark
+• navigation bar
+
+Use ALL visual evidence together.
+
+For example:
+
+green HBL logo
+red UBL swirl
+green Meezan emblem
+blue MCB logo
+red Bank Alfalah logo
+yellow EasyPaisa branding
+black SadaPay branding
+purple NayaPay branding
+red JazzCash branding
+
+Even if the bank name is not written completely, identify it using:
+
+• logo
+• icon
+• brand colors
+• typography
+• partial letters
+• application interface
+
+Common institutions include:
+
+HBL
+UBL
+Meezan Bank
+MCB Bank
+Bank Alfalah
+Allied Bank
+Askari Bank
+Bank Al Habib
+Faysal Bank
+JS Bank
+Soneri Bank
+Standard Chartered
+NBP
+EasyPaisa
+JazzCash
+SadaPay
+NayaPay
+Konnect
+RAAST
+
+If BOTH accounts belong to different banks,
+identify BOTH separately.
+
+Example:
+
+Sender:
+Meezan Bank
+
+Receiver:
+HBL
+
+Do NOT copy the same bank into both fields unless the image clearly indicates that both accounts belong to the same institution.
+
+------------------------
+MULTIPLE ACCOUNT BLOCKS
+------------------------
+
+Many receipts contain TWO account sections.
+
+Always inspect the ENTIRE image.
+
+Do not stop after finding the first account.
+
+Read every visible account card before returning.
+
+------------------------
+IGNORE
+------------------------
+
+Ignore:
+
+watermarks
+
+background patterns
+
+advertisements
+
+blurred decorations
+
+UI elements
+
+status bar
+
+battery
+
+network icons
+
+notification icons
+
+------------------------
+CONFIDENCE
+------------------------
+
+Only return a bank if you are confident.
+
+If uncertain,
+
+return null.
+
+Do not guess.
+
+Return valid JSON only.
+`;
 
 /**
  * Downloads the image from a (possibly signed, expiring) URL and sends it
@@ -125,6 +371,11 @@ async function extractReceiptFields(imageUrl) {
     config: {
       responseMimeType: "application/json",
       responseSchema: receiptSchema,
+      // Deterministic, literal extraction — this is a reading task, not
+      // a creative one. Lower temperature reduces the odds of the model
+      // paraphrasing/guessing a name or bank instead of reporting what's
+      // actually on screen (or returning null when unsure).
+      temperature: 0,
     },
   });
 

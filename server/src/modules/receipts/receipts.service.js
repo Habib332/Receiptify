@@ -49,7 +49,7 @@ async function checkForDuplicates({
 async function createReceipt({
   businessId,
   uploadedBy,
-  receiverName, // required
+  receiverName, // required only for manual entry; OCR fills this in when a screenshot is attached
   amount,
   currency,
   receiptDate,
@@ -64,14 +64,14 @@ async function createReceipt({
 }) {
   const hasScreenshot = Boolean(fileBuffer);
 
-  if (!receiverName) {
-    throw new ApiError(400, "receiverName is required");
-  }
-
-  if (!hasScreenshot && (!amount || !receiptDate)) {
+  // receiverName/amount/receiptDate requiredness is already enforced by
+  // the Joi schema (receipts.validation.js) using the same hasScreenshot
+  // conditional — no need to duplicate that check here. When a screenshot
+  // is attached, these are legitimately null until OCR runs.
+  if (!hasScreenshot && (!amount || !receiptDate || !receiverName)) {
     throw new ApiError(
       400,
-      "amount and receiptDate are required when no screenshot is attached",
+      "receiverName, amount and receiptDate are required when no screenshot is attached",
     );
   }
 

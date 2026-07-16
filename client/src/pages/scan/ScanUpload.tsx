@@ -29,8 +29,7 @@ export default function ScanUpload() {
     const [fileName, setFileName] = useState('')
     const [error, setError] = useState('')
 
-    const [vendorName, setVendorName] = useState('')
-    const [fieldErrors, setFieldErrors] = useState<{ vendorName?: string; businessId?: string }>({})
+    const [fieldErrors, setFieldErrors] = useState<{ businessId?: string }>({})
     const [submitting, setSubmitting] = useState(false)
 
     // Business selector — always shown, per product decision. The token
@@ -102,9 +101,6 @@ export default function ScanUpload() {
 
     const validate = () => {
         const errors: typeof fieldErrors = {}
-        if (!vendorName.trim()) {
-            errors.vendorName = 'Vendor name is required'
-        }
         if (!selectedBusinessId) {
             errors.businessId = 'Please select a business'
         }
@@ -161,7 +157,14 @@ export default function ScanUpload() {
 
             const formData = new FormData()
             formData.append('screenshot', file)
-            formData.append('vendorName', vendorName.trim())
+            // receiverName is intentionally NOT sent here. With a
+            // screenshot attached, receipts.validation.js makes it
+            // optional (Joi: hasScreenshot -> optional) and OCR
+            // (extractReceiptFields) fills in receiver_name /
+            // receiver_bank / sender_name / sender_bank / amount /
+            // receipt_date / transactionReference asynchronously after
+            // this request completes. See runOcrForReceipt in
+            // receipts.service.js.
 
             const res = await fetch(`${API_BASE_URL}/receipts`, {
                 method: 'POST',
@@ -189,7 +192,6 @@ export default function ScanUpload() {
         setPreview(null)
         setFile(null)
         setFileName('')
-        setVendorName('')
         setFieldErrors({})
         setError('')
     }
@@ -336,23 +338,6 @@ export default function ScanUpload() {
                                 Remove
                             </button>
                         </div>
-                    </div>
-
-                    <div className="mb-4">
-                        <label className="text-xs font-medium text-gray-500 mb-1.5 block">Vendor name</label>
-                        <input
-                            type="text"
-                            value={vendorName}
-                            onChange={(e) => {
-                                setVendorName(e.target.value)
-                                if (fieldErrors.vendorName) setFieldErrors((prev) => ({ ...prev, vendorName: undefined }))
-                            }}
-                            placeholder="e.g. Metro Store"
-                            className={`w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 placeholder:text-gray-400 ${
-                                fieldErrors.vendorName ? 'ring-2 ring-red-200' : 'focus:ring-blue-200'
-                            }`}
-                        />
-                        {fieldErrors.vendorName && <p className="text-xs text-red-500 mt-1">{fieldErrors.vendorName}</p>}
                     </div>
 
                     <button

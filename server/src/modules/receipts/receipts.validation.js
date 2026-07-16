@@ -1,10 +1,19 @@
 const Joi = require("joi");
 
-// receiverName is required (maps to receiver_name in DB)
-// amount/receiptDate conditionally required: mandatory on manual entry,
-// optional when a screenshot is attached (OCR fills them in async).
+// receiverName maps to receiver_name in DB.
+// receiverName/amount/receiptDate are conditionally required: mandatory
+// on manual entry, optional when a screenshot is attached (OCR fills
+// them in async — see runOcrForReceipt in receipts.service.js).
 const createReceipt = Joi.object({
-  receiverName: Joi.string().trim().min(1).max(255).required(),
+  receiverName: Joi.string()
+    .trim()
+    .min(1)
+    .max(255)
+    .when(Joi.ref("$hasScreenshot"), {
+      is: true,
+      then: Joi.optional(),
+      otherwise: Joi.required(),
+    }),
   amount: Joi.number().positive().precision(2).when(Joi.ref("$hasScreenshot"), {
     is: true,
     then: Joi.optional(),
