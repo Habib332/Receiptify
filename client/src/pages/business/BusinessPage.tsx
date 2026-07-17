@@ -8,6 +8,7 @@ import JoinBusinessModal from './JoinBusinessModal'
 import TypeFilterDropdown from './TypeFilterDropdown'
 import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
+import JoinRequestsReviewList from './JoinRequestsReviewList'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -72,6 +73,7 @@ export default function BusinessesPage() {
     const [editingBusiness, setEditingBusiness] = useState<Business | null>(null)
     const [joiningBusiness, setJoiningBusiness] = useState<Business | null>(null)
     const [joinLoading, setJoinLoading] = useState(false)
+    const [pendingRequestBusinessIds, setPendingRequestBusinessIds] = useState<Set<string>>(new Set())
 
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
@@ -85,6 +87,7 @@ export default function BusinessesPage() {
     const [showNotifications, setShowNotifications] = useState(false)
     const [notifications, setNotifications] = useState<NotificationItem[]>([])
     const [notificationsLoading, setNotificationsLoading] = useState(false)
+    const [reviewingBusinessId, setReviewingBusinessId] = useState<string | null>(null)
 
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
@@ -313,21 +316,22 @@ export default function BusinessesPage() {
     // business's owner ("X joined your business"). We refresh notifications
     // here too so that if the current user shares a session with the owner
     // view (e.g. testing as owner in the same browser), the bell updates.
-    const handleJoin = async () => {
+    const handleJoin = async (requestedRole: 'manager' | 'staff') => {
         if (!joiningBusiness) return
         setJoinLoading(true)
         setError('')
 
         try {
-            const res = await fetch(`${API_BASE_URL}/business/${joiningBusiness.id}/join`, {
+            const res = await fetch(`${API_BASE_URL}/business/${joiningBusiness.id}/join-requests`, {
                 method: 'POST',
                 headers: authHeaders(),
+                body: JSON.stringify({ requestedRole }),
             })
 
             const data = await res.json()
 
             if (!res.ok || !data.success) {
-                const message = data.message || 'Failed to join business'
+                const message = data.message || 'Failed to send join request'
                 setJoiningBusiness(null)
 
                 if (isPermissionError(res.status, message)) {
@@ -335,14 +339,17 @@ export default function BusinessesPage() {
                     return
                 }
 
+                // "You already have a pending request" (409) lands here too —
+                // surfaced as a normal inline error rather than the permission
+                // modal, since it's not a permissions problem.
                 setError(message)
                 return
             }
 
+            setPendingRequestBusinessIds((prev) => new Set(prev).add(joiningBusiness.id))
             setJoiningBusiness(null)
-            await fetchBusinesses()
-            await fetchStats()
-            await fetchNotifications()
+            // No fetchBusinesses/fetchStats here — a pending request doesn't
+            // change membership or receipt counts yet, only approval does.
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         } finally {
@@ -539,6 +546,8 @@ export default function BusinessesPage() {
                     // belong, so Join would be meaningless (or worse, a way
                     // to accidentally re-trigger membership logic) for them.
                     const hasJoined = !!biz.userRole
+                    const hasPendingRequest = pendingRequestBusinessIds.has(biz.id)
+                    const joinButtonDisabled = hasJoined || hasPendingRequest
                     return (
                         <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
                             <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
@@ -580,31 +589,47 @@ export default function BusinessesPage() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div className="leading-tight">
-                                    <p className="text-sm font-semibold">{biz.totalSpent}</p>
-                                    <p className="text-[10px] text-green-500">Total Spent</p>
+                            {/* Only shows when the current user actually belongs to
+                                this business (owner/manager/staff). If they're not a
+                                member, this slot is simply omitted rather than showing
+                                a placeholder — same size/position as the old
+                                "Total Spent" box when it is present. */}
+                            {biz.userRole && (
+                                <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 shrink-0">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <div className="leading-tight">
+                                        <p className="text-sm font-semibold capitalize">{biz.userRole}</p>
+                                        <p className="text-[10px] text-green-500">Your Role</p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+
+                            {biz.userRole && ['owner', 'manager'].includes(biz.userRole) && (
+                                <button
+                                    onClick={() => setReviewingBusinessId(biz.id)}
+                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0 whitespace-nowrap"
+                                >
+                                    Review requests
+                                </button>
+                            )}
 
                             <div className="flex items-center gap-1.5 shrink-0">
                                 <button
-                                    disabled={hasJoined}
+                                    disabled={joinButtonDisabled}
                                     onClick={() => {
-                                        if (!hasJoined) {
+                                        if (!joinButtonDisabled) {
                                             setJoiningBusiness(biz)
                                         }
                                     }}
                                     className={`min-w-[96px] h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors border
-    ${hasJoined
+        ${joinButtonDisabled
                                             ? 'bg-white text-blue-600 border-blue-600 cursor-default'
                                             : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
                                         }`}
                                 >
-                                    {hasJoined ? 'Joined' : 'Join'}
+                                    {hasJoined ? 'Joined' : hasPendingRequest ? 'Pending' : 'Join'}
                                 </button>
                                 <button
                                     onClick={() => setEditingBusiness(biz)}
@@ -667,6 +692,23 @@ export default function BusinessesPage() {
                     onMarkRead={handleMarkNotificationRead}
                     onMarkAllRead={handleMarkAllNotificationsRead}
                 />
+            )}
+            
+            {reviewingBusinessId && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+                    onClick={() => setReviewingBusinessId(null)}
+                >
+                    <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg">
+                        <JoinRequestsReviewList businessId={Number(reviewingBusinessId)} />
+                        <button
+                            onClick={() => setReviewingBusinessId(null)}
+                            className="mt-3 w-full h-9 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
             )}
         </Layout>
     )

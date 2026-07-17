@@ -1,7 +1,11 @@
+import { useState } from 'react'
+
+type RequestedRole = 'manager' | 'staff'
+
 type JoinBusinessModalProps = {
     businessName: string
     loading: boolean
-    onConfirm: () => void
+    onConfirm: (requestedRole: RequestedRole) => void
     onClose: () => void
 }
 
@@ -11,6 +15,8 @@ export default function JoinBusinessModal({
     onConfirm,
     onClose,
 }: JoinBusinessModalProps) {
+    const [requestedRole, setRequestedRole] = useState<RequestedRole>('staff')
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
@@ -20,11 +26,30 @@ export default function JoinBusinessModal({
                     </svg>
                 </div>
 
-                <h2 className="text-lg font-bold text-gray-900 mb-1">Join {businessName}?</h2>
-                <p className="text-sm text-gray-500 mb-6">
-                    You'll be added as <span className="font-semibold text-gray-700">staff</span> for this
-                    business. You can be given a different role later by an owner or manager.
+                <h2 className="text-lg font-bold text-gray-900 mb-1">Request to join {businessName}?</h2>
+                <p className="text-sm text-gray-500 mb-5">
+                    An owner or manager will review your request. You&apos;ll be notified once it&apos;s approved
+                    or declined.
                 </p>
+
+                <label className="block text-xs font-medium text-gray-500 mb-2">Requested role</label>
+                <div className="flex gap-2 mb-6">
+                    {(['staff', 'manager'] as RequestedRole[]).map((role) => (
+                        <button
+                            key={role}
+                            type="button"
+                            onClick={() => setRequestedRole(role)}
+                            disabled={loading}
+                            className={`flex-1 text-sm font-medium rounded-lg py-2 capitalize transition-colors disabled:opacity-50 ${
+                                requestedRole === role
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            {role}
+                        </button>
+                    ))}
+                </div>
 
                 <div className="flex items-center gap-3">
                     <button
@@ -35,7 +60,7 @@ export default function JoinBusinessModal({
                         Cancel
                     </button>
                     <button
-                        onClick={onConfirm}
+                        onClick={() => onConfirm(requestedRole)}
                         disabled={loading}
                         className="flex-1 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
@@ -45,7 +70,7 @@ export default function JoinBusinessModal({
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                             </svg>
                         )}
-                        {loading ? 'Joining...' : 'Confirm Join'}
+                        {loading ? 'Sending...' : 'Send Request'}
                     </button>
                 </div>
             </div>
