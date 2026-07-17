@@ -17,8 +17,52 @@ function assertNotificationBelongsToBusiness(notification, businessId) {
   }
 }
 
+// Only the reviewer-facing "New join request" notification should ever
+// render approve/reject controls — never the applicant-facing
+// "approved"/"declined" one. Both share type "join_request" and both
+// join in the same requested_role/status columns via
+// related_join_request_id, so title is what distinguishes them (title is
+// set once at creation and never changes, unlike jr.status which is live
+// and would otherwise make an old "declined" notification look
+// re-openable if the same requester ever submitted a new request that
+// happened to resolve to 'pending' with the same request_id — it can't
+// in practice since request ids don't get reused, but keying off title
+// rather than status keeps the two notification "kinds" unambiguous even
+// if that assumption ever changes).
+const REVIEWER_JOIN_REQUEST_TITLE = "New join request";
+
+function shapeNotification(row) {
+  const isReviewerJoinRequest =
+    row.type === "join_request" && row.title === REVIEWER_JOIN_REQUEST_TITLE;
+
+  return {
+    id: row.notification_id,
+    type: row.type,
+    title: row.title,
+    message: row.message,
+    businessId: row.business_id,
+    businessName: row.business_name ?? null,
+    actorName: row.actor_name ?? null,
+    actorEmail: row.actor_email ?? null,
+    createdAt: row.created_at,
+    read: row.is_read,
+    joinRequest:
+      isReviewerJoinRequest && row.related_join_request_id
+        ? {
+            requestId: row.related_join_request_id,
+            requestedRole: row.join_request_requested_role,
+            status: row.join_request_status,
+          }
+        : null,
+  };
+}
+
 async function listNotificationsForUser({ businessId, userId }) {
-  return notificationsRepository.listForUser({ businessId, userId });
+  const rows = await notificationsRepository.listForUser({
+    businessId,
+    userId,
+  });
+  return rows.map(shapeNotification);
 }
 
 async function markNotificationAsRead({ notificationId, businessId }) {

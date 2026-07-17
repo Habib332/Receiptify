@@ -9,6 +9,131 @@ const {
 const { extractReceiptFields } = require("../../utils/ocr");
 const ApiError = require("../../utils/apiError");
 
+// ---- Search & Filters (PRD 5.7 / 5.8) ----
+const VALID_VERIFICATION_STATUSES = ["pending", "verified", "rejected"];
+const VALID_DUPLICATE_STATUSES = [
+  "none",
+  "flagged",
+  "confirmed_duplicate",
+  "not_duplicate",
+];
+const VALID_DATE_PRESETS = ["today", "yesterday", "last_week", "last_month"];
+
+// Resolves a 5.8 filter preset into { dateFrom, dateTo } as "YYYY-MM-DD"
+// strings, matching the DATE type-parser fix in database.js (raw string,
+// no Date object timezone round-trip) so this can't reintroduce the
+// off-by-one-day bug described in section 9 of the progress log.
+// Boundaries are computed on UTC year/month/day components (not ms
+// arithmetic) so they don't drift across DST or month-length changes.
+function resolveDatePreset(preset) {
+  const now = new Date();
+  const toDateString = (d) => d.toISOString().slice(0, 10);
+  const startOfDay = (d) =>
+    new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const today = startOfDay(now);
+
+  switch (preset) {
+    case "today": {
+      const d = toDateString(today);
+      return { dateFrom: d, dateTo: d };
+    }
+    case "yesterday": {
+      const y = new Date(today);
+      y.setUTCDate(y.getUTCDate() - 1);
+      const d = toDateString(y);
+      return { dateFrom: d, dateTo: d };
+    }
+    case "last_week": {
+      const from = new Date(today);
+      from.setUTCDate(from.getUTCDate() - 7);
+      return { dateFrom: toDateString(from), dateTo: toDateString(today) };
+    }
+    case "last_month": {
+      const from = new Date(today);
+      from.setUTCMonth(from.getUTCMonth() - 1);
+      return { dateFrom: toDateString(from), dateTo: toDateString(today) };
+    }
+    default:
+      throw new ApiError(400, `Unknown date preset: ${preset}`);
+  }
+}
+
+// req.query values arrive as strings (or undefined) regardless of the
+// underlying type, since they come off a URL query string.
+async function searchReceipts({ businessId, query }) {
+  const {
+    customer,
+    bank,
+    reference,
+    employee,
+    verificationStatus,
+    duplicateStatus,
+    minAmount,
+    maxAmount,
+    date, // convenience: single date, expands to dateFrom = dateTo = date
+    dateFrom,
+    dateTo,
+    uploadDateFrom,
+    uploadDateTo,
+    datePreset, // 'today' | 'yesterday' | 'last_week' | 'last_month'
+  } = query;
+
+  if (
+    verificationStatus &&
+    !VALID_VERIFICATION_STATUSES.includes(verificationStatus)
+  ) {
+    throw new ApiError(
+      400,
+      `Invalid verificationStatus: ${verificationStatus}`,
+    );
+  }
+
+  if (duplicateStatus && !VALID_DUPLICATE_STATUSES.includes(duplicateStatus)) {
+    throw new ApiError(400, `Invalid duplicateStatus: ${duplicateStatus}`);
+  }
+
+  if (datePreset && !VALID_DATE_PRESETS.includes(datePreset)) {
+    throw new ApiError(400, `Invalid datePreset: ${datePreset}`);
+  }
+
+  if (
+    minAmount !== undefined &&
+    maxAmount !== undefined &&
+    Number(minAmount) > Number(maxAmount)
+  ) {
+    throw new ApiError(400, "minAmount cannot be greater than maxAmount");
+  }
+
+  let resolvedDateFrom = dateFrom;
+  let resolvedDateTo = dateTo;
+
+  // datePreset (5.8 filter chips) takes precedence over manual
+  // dateFrom/dateTo/date (5.7 free-form search) if both are somehow sent.
+  if (datePreset) {
+    const resolved = resolveDatePreset(datePreset);
+    resolvedDateFrom = resolved.dateFrom;
+    resolvedDateTo = resolved.dateTo;
+  } else if (date) {
+    resolvedDateFrom = date;
+    resolvedDateTo = date;
+  }
+
+  return receiptsRepository.searchReceiptsByBusiness(businessId, {
+    customer,
+    bank,
+    reference,
+    employee,
+    verificationStatus,
+    duplicateStatus,
+    minAmount: minAmount !== undefined ? Number(minAmount) : undefined,
+    maxAmount: maxAmount !== undefined ? Number(maxAmount) : undefined,
+    dateFrom: resolvedDateFrom,
+    dateTo: resolvedDateTo,
+    uploadDateFrom,
+    uploadDateTo,
+  });
+}
+
 function assertReceiptBelongsToBusiness(receipt, businessId) {
   if (!receipt) {
     throw new ApiError(404, "Receipt not found");
@@ -355,6 +480,7 @@ module.exports = {
   createReceipt,
   runOcrForReceipt,
   getReceiptsForBusiness,
+  searchReceipts,
   getReceiptById,
   updateReceipt,
   deleteReceipt,

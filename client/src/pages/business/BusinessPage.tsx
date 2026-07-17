@@ -173,6 +173,7 @@ export default function BusinessesPage() {
                     id: n.id ?? n.notification_id,
                     businessName: n.businessName ?? n.business_name ?? null,
                     actorName: n.actorName ?? n.actor_name ?? null,
+                    actorEmail: n.actorEmail ?? n.actor_email ?? null,
                     createdAt: n.createdAt ?? n.created_at,
                     read: n.read ?? n.is_read ?? false,
                 }))
@@ -392,6 +393,32 @@ export default function BusinessesPage() {
             setNotifications(prev)
             console.error(err)
         }
+    }
+
+    // Called by NotificationsModal after it successfully approves/rejects a
+    // join request inline. The API call itself already happened inside the
+    // modal — this just reconciles this page's state afterward:
+    //  - the notification's joinRequest.status flips so the modal stops
+    //    showing Approve/Reject for it (it's already resolved)
+    //  - businesses/stats refetch, since an approval changes membership
+    //    (and, if it's the current user's own business list, receipt/role
+    //    counts can shift too)
+    const handleNotificationDecisionMade = async (notificationId: string, decision: 'approve' | 'reject') => {
+        setNotifications((prev) =>
+            prev.map((n) =>
+                n.id === notificationId && n.joinRequest
+                    ? {
+                          ...n,
+                          read: true,
+                          joinRequest: {
+                              ...n.joinRequest,
+                              status: decision === 'approve' ? 'approved' : 'rejected',
+                          },
+                      }
+                    : n
+            )
+        )
+        await Promise.all([fetchBusinesses(), fetchStats()])
     }
 
     const overviewStats = [
@@ -691,6 +718,7 @@ export default function BusinessesPage() {
                     onClose={() => setShowNotifications(false)}
                     onMarkRead={handleMarkNotificationRead}
                     onMarkAllRead={handleMarkAllNotificationsRead}
+                    onDecisionMade={handleNotificationDecisionMade}
                 />
             )}
             

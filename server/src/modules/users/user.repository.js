@@ -69,10 +69,18 @@ async function getReceiptsSubmittedByBusiness(userId) {
   );
   return result.rows;
 }
+async function findUserById(userId) {
+  const result = await pool.query(
+    `SELECT user_id, name, email FROM users WHERE user_id = $1`,
+    [userId],
+  );
+  return result.rows[0];
+}
 
 module.exports = {
   findProfileById,
   getUserBusinessesWithReceiptCounts,
   getReceiptsSubmittedCount,
   getReceiptsSubmittedByBusiness,
+  findUserById,
 };

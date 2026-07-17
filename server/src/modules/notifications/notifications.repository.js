@@ -32,11 +32,29 @@ async function createNotification({
 // Scoped to businessId first since a session token is always for one
 // specific business — a user never sees another business's notifications
 // through this endpoint even if they belong to both.
+//
+// LEFT JOINs (not INNER) against business_join_requests and businesses:
+// most notifications have no related_join_request_id at all, and this
+// query must still return those rows — the join only adds columns when
+// related_join_request_id is set, and is NULL-safe otherwise. We select
+// jr.status directly (not resolved by the join_requests service) so a
+// notification's "actionable" state always reflects the request's
+// *current* status, even if it was resolved through some other path
+// after the notification row was created.
 async function listForUser({ businessId, userId }) {
   const result = await pool.query(
-    `SELECT * FROM notifications
-     WHERE business_id = $1 AND (user_id = $2 OR user_id IS NULL)
-     ORDER BY created_at DESC`,
+    `SELECT n.*,
+            b.name AS business_name,
+            jr.requested_role AS join_request_requested_role,
+            jr.status AS join_request_status,
+            ru.name AS actor_name,
+            ru.email AS actor_email
+     FROM notifications n
+     LEFT JOIN business_join_requests jr ON jr.request_id = n.related_join_request_id
+     LEFT JOIN businesses b ON b.business_id = n.business_id
+     LEFT JOIN users ru ON ru.user_id = jr.user_id
+     WHERE n.business_id = $1 AND (n.user_id = $2 OR n.user_id IS NULL)
+     ORDER BY n.created_at DESC`,
     [businessId, userId],
   );
   return result.rows;

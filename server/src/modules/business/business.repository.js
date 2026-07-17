@@ -170,6 +170,18 @@ async function joinBusinessAsStaff({ businessId, userId }) {
   return { ...result.rows[0], alreadyMember: false };
 }
 
+async function findOwnersAndManagers({ businessId }) {
+  const result = await pool.query(
+    `SELECT user_id, role
+     FROM business_users
+     WHERE business_id = $1 AND role IN ('owner', 'manager')`,
+    [businessId],
+  );
+  return result.rows;
+}
+
+
+
 module.exports = {
   createBusiness,
   linkUserToBusiness,
@@ -183,4 +195,5 @@ module.exports = {
   deleteBusiness,
   getUserRolesForBusinesses,
   joinBusinessAsStaff,
+  findOwnersAndManagers,
 };

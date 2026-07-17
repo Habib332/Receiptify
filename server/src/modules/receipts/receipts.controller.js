@@ -45,10 +45,19 @@ async function createReceipt(req, res, next) {
 }
 
 // GET /api/receipts
+// Search & filters (PRD 5.7 / 5.8) are query params on this same route,
+// not a separate endpoint — e.g. GET /api/receipts?customer=Ali or
+// GET /api/receipts?datePreset=last_week. No query params -> original,
+// unfiltered list behavior (unchanged from before this feature).
 async function listReceipts(req, res, next) {
   try {
     const { businessId } = req.user;
-    const receipts = await receiptsService.getReceiptsForBusiness(businessId);
+    const hasSearchParams = Object.keys(req.query).length > 0;
+
+    const receipts = hasSearchParams
+      ? await receiptsService.searchReceipts({ businessId, query: req.query })
+      : await receiptsService.getReceiptsForBusiness(businessId);
+
     res.status(200).json({ success: true, data: receipts });
   } catch (err) {
     next(err);

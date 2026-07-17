@@ -2,6 +2,10 @@ const joinRequestsRepository = require("./businessJoinRequests.repository");
 const businessRepository = require("./business.repository");
 const authRepository = require("../auth/auth.repository");
 const notificationsService = require("../notifications/notifications.service");
+const notificationsRepository = require("../notifications/notifications.repository");
+const usersRepository = require("../users/user.repository");
+const REVIEWER_JOIN_REQUEST_TITLE = "New join request";
+
 const ApiError = require("../../utils/apiError");
 
 // Same ownership-guard shape as business.service.js's assertCanModifyBusiness,
@@ -62,15 +66,23 @@ async function requestToJoin({ userId, businessId, requestedRole }) {
   // Fire-and-forget, same spirit as OCR's background run — the request
   // is already created and returned to the client; a notification
   // failure shouldn't turn a successful request into an error response.
-  const ownerUserIds =
-    await joinRequestsRepository.getOwnersForBusiness(businessId);
-  const applicant = await authRepository.findUserById(userId);
-  notificationsService.notifyJoinRequestCreated({
-    businessId,
-    ownerUserIds,
-    joinRequestId: request.request_id,
-    applicantName: applicant?.name,
-  });
+const requester = await usersRepository.findUserById(userId);
+const reviewers = await businessRepository.findOwnersAndManagers({
+  businessId,
+});
+
+await Promise.all(
+  reviewers.map((reviewer) =>
+    notificationsRepository.createNotification({
+      businessId,
+      userId: reviewer.user_id,
+      type: "join_request",
+      title: REVIEWER_JOIN_REQUEST_TITLE,
+      message: `${requester?.name ?? "Someone"} wants to join as ${requestedRole}`,
+      relatedJoinRequestId: request.request_id,
+    }),
+  ),
+);
 
   return request;
 }

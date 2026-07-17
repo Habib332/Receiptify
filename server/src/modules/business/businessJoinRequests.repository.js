@@ -75,6 +75,47 @@ async function getOwnersForBusiness(businessId) {
   return result.rows.map((row) => row.user_id);
 }
 
+// Approves a request AND grants business access in a single transaction —
+// resolves the join request to 'approved' and inserts the user into
+// business_users atomically. Returns undefined if the request was no
+// longer pending (lost a race with another reviewer).
+async function approveAndLinkUser({ requestId, businessId, userId, role, resolvedBy }) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const updateResult = await client.query(
+      `UPDATE business_join_requests
+       SET status = 'approved', resolved_at = NOW(), resolved_by = $2
+       WHERE request_id = $1 AND status = 'pending'
+       RETURNING *`,
+      [requestId, resolvedBy],
+    );
+
+    const resolvedRequest = updateResult.rows[0];
+    if (!resolvedRequest) {
+      // Someone else already resolved it — nothing to link.
+      await client.query("ROLLBACK");
+      return undefined;
+    }
+
+    await client.query(
+      `INSERT INTO business_users (business_id, user_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (business_id, user_id) DO NOTHING`,
+      [businessId, userId, role],
+    );
+
+    await client.query("COMMIT");
+    return resolvedRequest;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   createJoinRequest,
   findJoinRequestById,
@@ -82,4 +123,5 @@ module.exports = {
   getPendingRequestsForBusiness,
   resolveJoinRequest,
   getOwnersForBusiness,
+  approveAndLinkUser,
 };

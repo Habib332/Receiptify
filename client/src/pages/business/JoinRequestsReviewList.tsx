@@ -143,3 +143,14 @@ export default function JoinRequestsReviewList({ businessId }: Props) {
         </div>
     )
 }
+
+
+
+
+
+
+
+
+
+
+

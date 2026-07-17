@@ -212,6 +212,102 @@ async function countFlaggedDuplicatesByBusiness(businessId) {
   return result.rows[0].count;
 }
 
+// ---- Search & Filters (PRD 5.7 / 5.8) ----
+//
+// All filters optional; only the ones present are applied. Free-text
+// fields (customer/bank/reference/employee) use ILIKE for partial,
+// case-insensitive matching. Enum fields (verificationStatus,
+// duplicateStatus) use exact "=" match — they're validated against the
+// schema's CHECK constraints one layer up, in receipts.service.js.
+//
+// "employee" has no column on receipts itself — uploaded_by is a user_id
+// FK, not a name — so this LEFT JOINs users to search/filter by name.
+// LEFT (not INNER) so a receipt is never silently dropped from results
+// just because the join target is missing; it only matters when the
+// caller is actively filtering by employee.
+async function searchReceiptsByBusiness(businessId, filters = {}) {
+  const {
+    customer, // -> sender_name ILIKE (PRD "Customer", mapped per schema)
+    bank, // -> sender_bank ILIKE (sender side only, per project decision)
+    reference, // -> transaction_reference ILIKE
+    employee, // -> users.name ILIKE, joined via uploaded_by
+    verificationStatus, // -> verification_status = (exact, enum)
+    duplicateStatus, // -> duplicate_status = (exact, enum)
+    minAmount, // -> amount >= (inclusive)
+    maxAmount, // -> amount <= (inclusive)
+    dateFrom, // -> receipt_date >= (inclusive)
+    dateTo, // -> receipt_date <= (inclusive)
+    uploadDateFrom, // -> created_at >= (inclusive)
+    uploadDateTo, // -> created_at <= (inclusive)
+  } = filters;
+
+  const conditions = ["r.business_id = $1"];
+  const values = [businessId];
+
+  function addCondition(sqlWithPlaceholder, value) {
+    values.push(value);
+    conditions.push(sqlWithPlaceholder.replace("?", `$${values.length}`));
+  }
+
+  if (customer) {
+    addCondition("r.sender_name ILIKE ?", `%${customer}%`);
+  }
+
+  if (bank) {
+    addCondition("r.sender_bank ILIKE ?", `%${bank}%`);
+  }
+
+  if (reference) {
+    addCondition("r.transaction_reference ILIKE ?", `%${reference}%`);
+  }
+
+  if (employee) {
+    addCondition("u.name ILIKE ?", `%${employee}%`);
+  }
+
+  if (verificationStatus) {
+    addCondition("r.verification_status = ?", verificationStatus);
+  }
+
+  if (duplicateStatus) {
+    addCondition("r.duplicate_status = ?", duplicateStatus);
+  }
+
+  if (minAmount !== undefined && minAmount !== null) {
+    addCondition("r.amount >= ?", minAmount);
+  }
+
+  if (maxAmount !== undefined && maxAmount !== null) {
+    addCondition("r.amount <= ?", maxAmount);
+  }
+
+  if (dateFrom) {
+    addCondition("r.receipt_date >= ?", dateFrom);
+  }
+
+  if (dateTo) {
+    addCondition("r.receipt_date <= ?", dateTo);
+  }
+
+  if (uploadDateFrom) {
+    addCondition("r.created_at >= ?", uploadDateFrom);
+  }
+
+  if (uploadDateTo) {
+    addCondition("r.created_at <= ?", uploadDateTo);
+  }
+
+  const result = await pool.query(
+    `SELECT r.*
+     FROM receipts r
+     LEFT JOIN users u ON u.user_id = r.uploaded_by
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY r.receipt_date DESC NULLS LAST, r.created_at DESC`,
+    values,
+  );
+  return result.rows;
+}
+
 // ---- OCR ----
 async function updateOcrResult(receiptId, { ocrStatus }) {
   const result = await pool.query(
@@ -263,6 +359,7 @@ module.exports = {
   updateReceipt,
   deleteReceipt,
   findPotentialDuplicates,
+  searchReceiptsByBusiness,
   countReceiptsByBusiness,
   getTotalSpentByBusiness,
   countAllReceipts,
