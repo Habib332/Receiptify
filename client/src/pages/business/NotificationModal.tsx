@@ -18,6 +18,7 @@ export type NotificationItem = {
     businessName?: string | null
     actorName?: string | null // the user who joined
     actorEmail?: string | null // email of the user who joined
+    actorAvatarUrl?: string | null // profile picture of the user who joined
     createdAt: string
     read: boolean
     // Present only for notifications tied to a pending business join request.
@@ -49,6 +50,29 @@ function timeAgo(iso: string) {
     if (hours < 24) return `${hours}h ago`
     const days = Math.floor(hours / 24)
     return `${days}d ago`
+}
+
+// Same fallback pattern used on the profile page: first + last initials,
+// or the first two letters if there's only one name segment.
+function getInitials(name: string) {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+// Same avatar pattern used on the profile page: show the real picture if
+// avatarUrl is present, otherwise fall back to initials-in-a-circle.
+function Avatar({ name, avatarUrl }: { name?: string | null; avatarUrl?: string | null }) {
+    const displayName = name || '?'
+    return (
+        <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 overflow-hidden">
+            {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
+            ) : (
+                <span className="font-semibold text-sm">{getInitials(displayName)}</span>
+            )}
+        </div>
+    )
 }
 
 export default function NotificationsModal({
@@ -147,9 +171,7 @@ export default function NotificationsModal({
                                     key={n.id}
                                     className={`px-5 py-3.5 flex items-start gap-3 ${n.read ? '' : 'bg-blue-50/50'}`}
                                 >
-                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 font-semibold text-sm">
-                                        {n.actorName?.[0]?.toUpperCase() ?? '?'}
-                                    </div>
+                                    <Avatar name={n.actorName} avatarUrl={n.actorAvatarUrl} />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm text-gray-800 leading-snug">{n.message}</p>
 
@@ -182,7 +204,7 @@ export default function NotificationsModal({
                                             <button
                                                 onClick={() => handleDecision(n, 'reject')}
                                                 disabled={isActing}
-                                                className="text-xs font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-lg px-3 py-1.5 hover:bg-gray-100 transition-colors"
+                                                className="text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 disabled:opacity-50 rounded-lg px-3 py-1.5 border border-red-200 hover:border-red-600 transition-colors"
                                             >
                                                 Reject
                                             </button>

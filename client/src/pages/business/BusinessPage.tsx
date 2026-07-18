@@ -8,7 +8,7 @@ import JoinBusinessModal from './JoinBusinessModal'
 import TypeFilterDropdown from './TypeFilterDropdown'
 import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
-import JoinRequestsReviewList from './JoinRequestsReviewList'
+import DeleteConfirmModal from './DeleteConfirmModal'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -74,6 +74,8 @@ export default function BusinessesPage() {
     const [joiningBusiness, setJoiningBusiness] = useState<Business | null>(null)
     const [joinLoading, setJoinLoading] = useState(false)
     const [pendingRequestBusinessIds, setPendingRequestBusinessIds] = useState<Set<string>>(new Set())
+    const [deletingBusiness, setDeletingBusiness] = useState<Business | null>(null)
+    const [deleteLoading, setDeleteLoading] = useState(false)
 
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
@@ -87,7 +89,6 @@ export default function BusinessesPage() {
     const [showNotifications, setShowNotifications] = useState(false)
     const [notifications, setNotifications] = useState<NotificationItem[]>([])
     const [notificationsLoading, setNotificationsLoading] = useState(false)
-    const [reviewingBusinessId, setReviewingBusinessId] = useState<string | null>(null)
 
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
@@ -234,9 +235,9 @@ export default function BusinessesPage() {
         await fetchBusinesses()
         await fetchStats()
     }
-
     const handleDelete = async (id: string) => {
         setError('')
+        setDeleteLoading(true)
         // Optimistic update
         const prevBusinesses = businesses
         setBusinesses((prev) => prev.filter((b) => b.id !== id))
@@ -252,8 +253,6 @@ export default function BusinessesPage() {
 
             if (!res.ok || !data.success) {
                 const message = data.message || 'Failed to delete business'
-                // Roll back before deciding how to show the error, so the
-                // list is correct either way.
                 setBusinesses(prevBusinesses)
 
                 if (isPermissionError(res.status, message)) {
@@ -268,10 +267,11 @@ export default function BusinessesPage() {
 
             await fetchStats()
         } catch (err) {
-            // Roll back on failure (covers network errors; permission-path
-            // above already rolled back and returned early)
             setBusinesses(prevBusinesses)
             setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setDeleteLoading(false)
+            setDeletingBusiness(null)
         }
     }
 
@@ -408,13 +408,13 @@ export default function BusinessesPage() {
             prev.map((n) =>
                 n.id === notificationId && n.joinRequest
                     ? {
-                          ...n,
-                          read: true,
-                          joinRequest: {
-                              ...n.joinRequest,
-                              status: decision === 'approve' ? 'approved' : 'rejected',
-                          },
-                      }
+                        ...n,
+                        read: true,
+                        joinRequest: {
+                            ...n.joinRequest,
+                            status: decision === 'approve' ? 'approved' : 'rejected',
+                        },
+                    }
                     : n
             )
         )
@@ -460,12 +460,12 @@ export default function BusinessesPage() {
                     <p className="text-sm text-gray-400 mt-1">Manage all your saved businesses in one place.</p>
                 </div>
                 <button
-    onClick={() => {
-        setShowNotifications(true)
-        fetchNotifications()
-    }}
-    className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
->
+                    onClick={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
+                >
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                     </svg>
@@ -636,15 +636,6 @@ export default function BusinessesPage() {
                                 </div>
                             )}
 
-                            {biz.userRole && ['owner', 'manager'].includes(biz.userRole) && (
-                                <button
-                                    onClick={() => setReviewingBusinessId(biz.id)}
-                                    className="text-xs font-semibold text-blue-600 hover:text-blue-700 shrink-0 whitespace-nowrap"
-                                >
-                                    Review requests
-                                </button>
-                            )}
-
                             <div className="flex items-center gap-1.5 shrink-0">
                                 <button
                                     disabled={joinButtonDisabled}
@@ -670,7 +661,7 @@ export default function BusinessesPage() {
                                     </svg>
                                 </button>
                                 <button
-                                    onClick={() => handleDelete(biz.id)}
+                                    onClick={() => setDeletingBusiness(biz)}
                                     className="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:text-red-600 flex items-center justify-center transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -724,22 +715,16 @@ export default function BusinessesPage() {
                     onDecisionMade={handleNotificationDecisionMade}
                 />
             )}
-            
-            {reviewingBusinessId && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-                    onClick={() => setReviewingBusinessId(null)}
-                >
-                    <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg">
-                        <JoinRequestsReviewList businessId={Number(reviewingBusinessId)} />
-                        <button
-                            onClick={() => setReviewingBusinessId(null)}
-                            className="mt-3 w-full h-9 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
+
+            {deletingBusiness && (
+                <DeleteConfirmModal
+                    businessName={deletingBusiness.name}
+                    loading={deleteLoading}
+                    onConfirm={() => handleDelete(deletingBusiness.id)}
+                    onClose={() => {
+                        if (!deleteLoading) setDeletingBusiness(null)
+                    }}
+                />
             )}
         </Layout>
     )

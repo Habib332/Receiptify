@@ -267,7 +267,7 @@ export default function ScanReview() {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            navigate('/')
+            navigate('/scan')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {
