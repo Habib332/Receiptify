@@ -318,3 +318,7 @@ CREATE INDEX IF NOT EXISTS idx_join_requests_status
 CREATE UNIQUE INDEX IF NOT EXISTS unique_pending_request_per_user
     ON business_join_requests (business_id, user_id)
     WHERE status = 'pending';
+
+ALTER TABLE receipts ADD COLUMN upload_status VARCHAR(20) NOT NULL DEFAULT 'draft';
+-- 'draft' = created by upload, not yet confirmed by user on Review
+-- 'confirmed' = user hit Save

@@ -57,6 +57,7 @@ function shapeNotification(row) {
     businessName: row.business_name ?? null,
     actorName: row.actor_name ?? null,
     actorEmail: row.actor_email ?? null,
+    actorAvatarUrl: row.actor_avatar_url ?? null,
     createdAt: row.created_at,
     read: row.is_read,
     joinRequest:

@@ -1,4 +1,3 @@
-// receipts.service.js
 const crypto = require("crypto");
 const receiptsRepository = require("./receipts.repository");
 const {
@@ -148,6 +147,9 @@ function computeScreenshotHash(fileBuffer) {
   return crypto.createHash("sha256").update(fileBuffer).digest("hex");
 }
 
+// Drafts (upload_status = 'draft') are excluded from the duplicate pool
+// at the repository layer — an unconfirmed draft should never flag
+// itself or another in-progress/abandoned draft.
 async function checkForDuplicates({
   businessId,
   transactionReference,
@@ -171,6 +173,14 @@ async function checkForDuplicates({
   };
 }
 
+// Creates a receipt as a DRAFT (upload_status = 'draft', set by the
+// repository on insert). Drafts are invisible to every business-facing
+// read path (list/search/stats/duplicate detection) until the user
+// confirms via updateReceipt (Save on the Review screen), which flips
+// upload_status to 'confirmed'. This keeps the upload->OCR->poll flow
+// working exactly as before — OCR still needs a real receipt_id to
+// write into and poll against — while nothing is "really" saved from
+// the business's point of view until the user reviews and saves it.
 async function createReceipt({
   businessId,
   uploadedBy,
@@ -213,6 +223,10 @@ async function createReceipt({
     });
   }
 
+  // Draft rows are excluded from duplicate detection (see
+  // findPotentialDuplicates), so this only flags against already
+  // confirmed receipts — which is fine to compute now and re-check at
+  // OCR time and again at save time.
   const { duplicateStatus } = await checkForDuplicates({
     businessId,
     transactionReference,
@@ -296,6 +310,8 @@ async function runOcrForReceipt({ receiptId, filePath }) {
       await receiptsRepository.updateReceipt(receiptId, autoFillUpdates);
 
       if (autoFillUpdates.transactionReference) {
+        // Still excludes other drafts (see findPotentialDuplicates) —
+        // only flags against already-confirmed receipts.
         const { duplicateStatus } = await checkForDuplicates({
           businessId: current.business_id,
           transactionReference: autoFillUpdates.transactionReference,
@@ -329,11 +345,20 @@ async function getReceiptById({ receiptId, businessId }) {
   return receipt;
 }
 
+// This is what "Save receipt" on the Review screen calls (PATCH
+// /receipts/:id). It both applies the user's edits AND confirms the
+// draft (upload_status: 'draft' -> 'confirmed'), which is the moment
+// the receipt actually becomes visible to the rest of the business —
+// lists, stats, duplicate detection against future uploads, etc.
 async function updateReceipt({ receiptId, businessId, updates }) {
   const existing = await receiptsRepository.findReceiptById(receiptId);
   assertReceiptBelongsToBusiness(existing, businessId);
 
   if (updates.transactionReference) {
+    // Re-check now that the reference is user-confirmed. Still excludes
+    // other drafts, but this receipt is about to become 'confirmed'
+    // itself, so from here on it will correctly show up as a match
+    // target for anything uploaded after it.
     const { duplicateStatus } = await checkForDuplicates({
       businessId,
       transactionReference: updates.transactionReference,
@@ -345,7 +370,10 @@ async function updateReceipt({ receiptId, businessId, updates }) {
     }
   }
 
-  return receiptsRepository.updateReceipt(receiptId, updates);
+  return receiptsRepository.updateReceipt(receiptId, {
+    ...updates,
+    uploadStatus: "confirmed",
+  });
 }
 
 async function deleteReceipt({ receiptId, businessId }) {
@@ -476,6 +504,33 @@ async function createBulkReceipts({
   return { batchId: batch.batch_id, processed, failed, total };
 }
 
+// Deletes drafts abandoned before the user reached/completed Review
+// (upload_status = 'draft' older than olderThanHours). Intended to be
+// called from a scheduled job (cron, etc.) — not wired to any route.
+// Removes the storage object for each draft's screenshot before
+// deleting the row, same cleanup order as deleteReceipt.
+async function cleanupStaleDrafts(olderThanHours = 24) {
+  const staleDrafts = await receiptsRepository.findStaleDrafts(olderThanHours);
+
+  for (const draft of staleDrafts) {
+    if (draft.image_url) {
+      try {
+        await deleteReceiptScreenshot(draft.image_url);
+      } catch (err) {
+        console.error(
+          `Failed to delete screenshot for stale draft ${draft.receipt_id}:`,
+          err.message,
+        );
+        // Continue anyway — better to drop the DB row and leak a storage
+        // object than to leave a stale draft row behind indefinitely.
+      }
+    }
+  }
+
+  const deleted = await receiptsRepository.deleteStaleDrafts(olderThanHours);
+  return { deletedCount: deleted.length };
+}
+
 module.exports = {
   createReceipt,
   runOcrForReceipt,
@@ -491,4 +546,5 @@ module.exports = {
   getSystemReceiptStats,
   computeScreenshotHash,
   createBulkReceipts,
+  cleanupStaleDrafts,
 };

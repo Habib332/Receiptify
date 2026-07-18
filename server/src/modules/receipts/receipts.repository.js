@@ -1,5 +1,15 @@
 const pool = require("../../config/database");
 
+// upload_status distinguishes an OCR/upload draft (not yet confirmed by
+// the user on the Review screen) from a confirmed receipt. This is
+// separate from verification_status, which is the PRD 5.5 owner/manager
+// verify-after-the-fact workflow — the two are independent axes.
+//
+// All read paths that power business-facing views (list, search, stats,
+// duplicate detection) filter to upload_status = 'confirmed' so drafts
+// are invisible until the user hits Save. findReceiptById does NOT
+// filter, since the Review page needs to fetch/poll its own draft by id.
+
 async function createReceipt({
   businessId,
   uploadedBy,
@@ -18,8 +28,8 @@ async function createReceipt({
   const result = await pool.query(
     `INSERT INTO receipts
        (business_id, uploaded_by, receiver_name, amount, currency, receipt_date, notes, image_url,
-        sender_name, sender_bank, receiver_bank, transaction_reference, screenshot_hash)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        sender_name, sender_bank, receiver_bank, transaction_reference, screenshot_hash, upload_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'draft')
      RETURNING *`,
     [
       businessId,
@@ -41,6 +51,8 @@ async function createReceipt({
 }
 
 async function findReceiptById(receiptId) {
+  // Intentionally unfiltered by upload_status — Review page needs to
+  // fetch/poll its own draft by id before it's confirmed.
   const result = await pool.query(
     `SELECT * FROM receipts WHERE receipt_id = $1`,
     [receiptId],
@@ -50,7 +62,9 @@ async function findReceiptById(receiptId) {
 
 async function getReceiptsByBusiness(businessId) {
   const result = await pool.query(
-    `SELECT * FROM receipts WHERE business_id = $1 ORDER BY receipt_date DESC`,
+    `SELECT * FROM receipts
+     WHERE business_id = $1 AND upload_status = 'confirmed'
+     ORDER BY receipt_date DESC`,
     [businessId],
   );
   return result.rows;
@@ -72,6 +86,7 @@ async function updateReceipt(
     screenshotHash,
     verificationStatus,
     duplicateStatus,
+    uploadStatus,
   },
 ) {
   const result = await pool.query(
@@ -88,7 +103,8 @@ async function updateReceipt(
          transaction_reference = COALESCE($11, transaction_reference),
          screenshot_hash = COALESCE($12, screenshot_hash),
          verification_status = COALESCE($13, verification_status),
-         duplicate_status = COALESCE($14, duplicate_status)
+         duplicate_status = COALESCE($14, duplicate_status),
+         upload_status = COALESCE($15, upload_status)
      WHERE receipt_id = $1
      RETURNING *`,
     [
@@ -106,6 +122,7 @@ async function updateReceipt(
       screenshotHash,
       verificationStatus,
       duplicateStatus,
+      uploadStatus,
     ],
   );
   return result.rows[0];
@@ -120,13 +137,16 @@ async function deleteReceipt(receiptId) {
 }
 
 // ---- Duplicate detection ----
+// Excludes drafts from the match pool — an unconfirmed draft (still
+// uploading, or abandoned) should never flag itself or another
+// in-progress draft as a duplicate. Only confirmed receipts count.
 async function findPotentialDuplicates({
   businessId,
   transactionReference,
   screenshotHash,
   excludeReceiptId = null,
 }) {
-  const conditions = ["business_id = $1"];
+  const conditions = ["business_id = $1", "upload_status = 'confirmed'"];
   const values = [businessId];
   const matchConditions = [];
 
@@ -161,7 +181,8 @@ async function findPotentialDuplicates({
 // ---- Stats ----
 async function countReceiptsByBusiness(businessId) {
   const result = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM receipts WHERE business_id = $1`,
+    `SELECT COUNT(*)::int AS count FROM receipts
+     WHERE business_id = $1 AND upload_status = 'confirmed'`,
     [businessId],
   );
   return result.rows[0].count;
@@ -169,7 +190,8 @@ async function countReceiptsByBusiness(businessId) {
 
 async function getTotalSpentByBusiness(businessId) {
   const result = await pool.query(
-    `SELECT COALESCE(SUM(amount), 0)::numeric AS total FROM receipts WHERE business_id = $1`,
+    `SELECT COALESCE(SUM(amount), 0)::numeric AS total FROM receipts
+     WHERE business_id = $1 AND upload_status = 'confirmed'`,
     [businessId],
   );
   return result.rows[0].total;
@@ -177,7 +199,7 @@ async function getTotalSpentByBusiness(businessId) {
 
 async function countAllReceipts() {
   const result = await pool.query(
-    `SELECT COUNT(*)::int AS count FROM receipts`,
+    `SELECT COUNT(*)::int AS count FROM receipts WHERE upload_status = 'confirmed'`,
   );
   return result.rows[0].count;
 }
@@ -187,6 +209,7 @@ async function getMostUsedBusiness() {
     `SELECT b.business_id, b.name, COUNT(r.receipt_id)::int AS receipt_count
      FROM businesses b
      JOIN receipts r ON r.business_id = b.business_id
+     WHERE r.upload_status = 'confirmed'
      GROUP BY b.business_id, b.name
      ORDER BY receipt_count DESC
      LIMIT 1`,
@@ -197,7 +220,7 @@ async function getMostUsedBusiness() {
 async function countPendingVerificationByBusiness(businessId) {
   const result = await pool.query(
     `SELECT COUNT(*)::int AS count FROM receipts
-     WHERE business_id = $1 AND verification_status = 'pending'`,
+     WHERE business_id = $1 AND verification_status = 'pending' AND upload_status = 'confirmed'`,
     [businessId],
   );
   return result.rows[0].count;
@@ -206,7 +229,7 @@ async function countPendingVerificationByBusiness(businessId) {
 async function countFlaggedDuplicatesByBusiness(businessId) {
   const result = await pool.query(
     `SELECT COUNT(*)::int AS count FROM receipts
-     WHERE business_id = $1 AND duplicate_status = 'flagged'`,
+     WHERE business_id = $1 AND duplicate_status = 'flagged' AND upload_status = 'confirmed'`,
     [businessId],
   );
   return result.rows[0].count;
@@ -225,6 +248,9 @@ async function countFlaggedDuplicatesByBusiness(businessId) {
 // LEFT (not INNER) so a receipt is never silently dropped from results
 // just because the join target is missing; it only matters when the
 // caller is actively filtering by employee.
+//
+// Always scoped to upload_status = 'confirmed' — drafts never appear in
+// search results.
 async function searchReceiptsByBusiness(businessId, filters = {}) {
   const {
     customer, // -> sender_name ILIKE (PRD "Customer", mapped per schema)
@@ -241,7 +267,7 @@ async function searchReceiptsByBusiness(businessId, filters = {}) {
     uploadDateTo, // -> created_at <= (inclusive)
   } = filters;
 
-  const conditions = ["r.business_id = $1"];
+  const conditions = ["r.business_id = $1", "r.upload_status = 'confirmed'"];
   const values = [businessId];
 
   function addCondition(sqlWithPlaceholder, value) {
@@ -352,6 +378,33 @@ async function findBatchById(batchId) {
   return result.rows[0];
 }
 
+// ---- Draft cleanup ----
+// Deletes unconfirmed drafts older than the given age (default 24h) —
+// covers users who upload a screenshot then never return to Review.
+// Caller (a scheduled job) is responsible for also deleting the
+// associated storage object for each returned image_url before/after
+// calling this, same as deleteReceipt + deleteReceiptScreenshot.
+async function findStaleDrafts(olderThanHours = 24) {
+  const result = await pool.query(
+    `SELECT receipt_id, image_url FROM receipts
+     WHERE upload_status = 'draft'
+       AND created_at < NOW() - ($1 || ' hours')::interval`,
+    [olderThanHours],
+  );
+  return result.rows;
+}
+
+async function deleteStaleDrafts(olderThanHours = 24) {
+  const result = await pool.query(
+    `DELETE FROM receipts
+     WHERE upload_status = 'draft'
+       AND created_at < NOW() - ($1 || ' hours')::interval
+     RETURNING receipt_id`,
+    [olderThanHours],
+  );
+  return result.rows;
+}
+
 module.exports = {
   createReceipt,
   findReceiptById,
@@ -370,4 +423,6 @@ module.exports = {
   createBatch,
   updateBatch,
   findBatchById,
+  findStaleDrafts,
+  deleteStaleDrafts,
 };

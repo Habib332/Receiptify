@@ -45,6 +45,11 @@ async function createNotification({
 // notification's "actionable" state always reflects the request's
 // *current* status, even if it was resolved through some other path
 // after the notification row was created.
+//
+// ru.avatar_url is selected alongside actor_name/actor_email — same
+// LEFT JOIN, same NULL-safety: rows with no related_join_request_id (and
+// thus no ru match) simply get actor_avatar_url = NULL, which the
+// frontend already falls back on to render initials.
 async function listForUser({ businessIds, userId }) {
   if (!businessIds || businessIds.length === 0) return [];
 
@@ -54,7 +59,8 @@ async function listForUser({ businessIds, userId }) {
             jr.requested_role AS join_request_requested_role,
             jr.status AS join_request_status,
             ru.name AS actor_name,
-            ru.email AS actor_email
+            ru.email AS actor_email,
+            ru.avatar_url AS actor_avatar_url
      FROM notifications n
      LEFT JOIN business_join_requests jr ON jr.request_id = n.related_join_request_id
      LEFT JOIN businesses b ON b.business_id = n.business_id
