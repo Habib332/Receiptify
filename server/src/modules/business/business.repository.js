@@ -43,6 +43,22 @@ async function getUserRoleForBusiness({ userId, businessId }) {
   return result.rows[0];
 }
 
+// All businesses this user owns or manages — used by notifications to
+// scope "which businesses' notifications can this user see" without
+// relying on a single businessId from the session token. A user can
+// own/manage multiple businesses; notifications shouldn't be limited to
+// whichever one they last selected client-side. Staff-role memberships
+// are intentionally excluded here — only owners/managers get business-wide
+// reviewer notifications (e.g. new join requests).
+async function getOwnedOrManagedBusinessIds(userId) {
+  const result = await pool.query(
+    `SELECT business_id FROM business_users
+     WHERE user_id = $1 AND role IN ('owner', 'manager')`,
+    [userId],
+  );
+  return result.rows.map((row) => row.business_id);
+}
+
 async function updateBusiness(
   businessId,
   { name, type, address, phone, logoUrl },
@@ -134,7 +150,6 @@ async function getDistinctBusinessTypes() {
   return result.rows.map((row) => row.type);
 }
 
-
 // --- Add these to business.model.js ---
 
 // Used by listBusinesses to annotate each row with the current user's role
@@ -180,8 +195,6 @@ async function findOwnersAndManagers({ businessId }) {
   return result.rows;
 }
 
-
-
 module.exports = {
   createBusiness,
   linkUserToBusiness,
@@ -191,6 +204,7 @@ module.exports = {
   findDuplicateBusiness,
   findBusinessById,
   getUserRoleForBusiness,
+  getOwnedOrManagedBusinessIds,
   updateBusiness,
   deleteBusiness,
   getUserRolesForBusinesses,

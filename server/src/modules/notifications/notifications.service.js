@@ -1,18 +1,31 @@
 const notificationsRepository = require("./notifications.repository");
+// Adjust this path if business.repository.js lives elsewhere relative to
+// this file — matches how businessJoinRequests.service.js imports it.
+const businessRepository = require("../business/business.repository");
 const ApiError = require("../../utils/apiError");
 
 // Same pattern as assertReceiptBelongsToBusiness in receipts.service.js —
-// a valid session token for Business A should never be able to touch a
-// notification belonging to Business B, even if the notificationId is
+// a user should never be able to touch a notification belonging to a
+// business they don't own/manage, even if the notificationId is
 // guessed/enumerated correctly.
-function assertNotificationBelongsToBusiness(notification, businessId) {
+//
+// "Belongs to this user" is now checked against the full set of
+// businesses the user owns/manages (looked up fresh from the DB via
+// business.repository.getOwnedOrManagedBusinessIds), rather than a
+// single businessId pulled from a session token — a user can own/manage
+// more than one business, and this must not depend on whichever one they
+// last "selected" client-side.
+function assertNotificationVisibleToUser(
+  notification,
+  ownedOrManagedBusinessIds,
+) {
   if (!notification) {
     throw new ApiError(404, "Notification not found");
   }
-  if (notification.business_id !== businessId) {
+  if (!ownedOrManagedBusinessIds.includes(notification.business_id)) {
     throw new ApiError(
       403,
-      "This notification does not belong to your business",
+      "This notification does not belong to a business you own or manage",
     );
   }
 }
@@ -57,20 +70,44 @@ function shapeNotification(row) {
   };
 }
 
-async function listNotificationsForUser({ businessId, userId }) {
+// Lists notifications across every business this user owns or manages —
+// scope is resolved fresh from business_users on each call, not from a
+// single businessId on the session token. A user with no owned/managed
+// businesses simply gets an empty list (staff-only members don't see
+// business-wide reviewer notifications, by design).
+async function listNotificationsForUser({ userId }) {
+  const businessIds =
+    await businessRepository.getOwnedOrManagedBusinessIds(userId);
   const rows = await notificationsRepository.listForUser({
-    businessId,
+    businessIds,
     userId,
   });
   return rows.map(shapeNotification);
 }
 
-async function markNotificationAsRead({ notificationId, businessId }) {
+async function markNotificationAsRead({ notificationId, userId }) {
+  const businessIds =
+    await businessRepository.getOwnedOrManagedBusinessIds(userId);
+
   const existing =
     await notificationsRepository.findNotificationById(notificationId);
-  assertNotificationBelongsToBusiness(existing, businessId);
+  assertNotificationVisibleToUser(existing, businessIds);
 
   return notificationsRepository.markAsRead(notificationId);
+}
+
+// Marks every notification visible to this user (across all
+// owned/managed businesses) as read. Backs PATCH /notifications/read-all,
+// which the frontend already calls but which had no route/service/
+// repository implementation before this.
+async function markAllNotificationsAsRead({ userId }) {
+  const businessIds =
+    await businessRepository.getOwnedOrManagedBusinessIds(userId);
+  const rows = await notificationsRepository.markAllAsRead({
+    businessIds,
+    userId,
+  });
+  return rows.map(shapeNotification);
 }
 
 // ---------------------------------------------------------------------
@@ -216,6 +253,7 @@ async function notifyJoinRequestResolved({
 module.exports = {
   listNotificationsForUser,
   markNotificationAsRead,
+  markAllNotificationsAsRead,
   notifyOcrFailed,
   notifyDuplicateFlagged,
   notifyReceiptVerified,
