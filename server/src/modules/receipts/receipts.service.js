@@ -465,7 +465,12 @@ async function createBulkReceipts({
   businessId,
   uploadedBy,
   files,
-  defaultReceiverName = "Unknown",
+  // No "Unknown" default here anymore — if this is left unset, receipts
+  // are created with receiverName: null so runOcrForReceipt's autofill
+  // (which only fills a field when it's currently empty) can actually
+  // set it from what the AI reads off the screenshot. Only used as an
+  // upfront value when the caller explicitly provides one.
+  defaultReceiverName = null,
 }) {
   const total = files.length;
   const batch = await receiptsRepository.createBatch({
@@ -476,18 +481,24 @@ async function createBulkReceipts({
 
   let processed = 0,
     failed = 0;
+  // Collected so the caller can hand these straight to a one-by-one
+  // review flow (PATCH /receipts/:id per item) without needing a
+  // separate "list receipts in this batch" endpoint — there's no
+  // batch_id column on receipts to query by.
+  const createdReceipts = [];
 
   for (const file of files) {
     try {
-      await createReceipt({
+      const receipt = await createReceipt({
         businessId,
         uploadedBy,
-        receiverName: defaultReceiverName,
+        receiverName: defaultReceiverName || undefined,
         fileBuffer: file.buffer,
         originalName: file.originalname,
         mimeType: file.mimetype,
         // all other fields left null; OCR will fill them
       });
+      createdReceipts.push(receipt);
       processed++;
     } catch (err) {
       console.error(`Bulk: failed to process ${file.originalname}`, err);
@@ -501,7 +512,13 @@ async function createBulkReceipts({
     status: failed === total ? "failed" : "completed",
   });
 
-  return { batchId: batch.batch_id, processed, failed, total };
+  return {
+    batchId: batch.batch_id,
+    processed,
+    failed,
+    total,
+    receipts: createdReceipts,
+  };
 }
 
 // Deletes drafts abandoned before the user reached/completed Review

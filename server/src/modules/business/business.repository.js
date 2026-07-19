@@ -195,6 +195,7 @@ async function findOwnersAndManagers({ businessId }) {
   return result.rows;
 }
 
+
 module.exports = {
   createBusiness,
   linkUserToBusiness,

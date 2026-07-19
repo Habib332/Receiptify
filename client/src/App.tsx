@@ -8,6 +8,8 @@ import SignUp from './pages/auth/SignUp';
 import Dashboard from './pages/dashboard/Dashboard';
 import AboutTheCreatorsPage from './pages/aboutTheCreators/AboutTheCreatorsPage';
 import AboutReceiptifyPage from './pages/aboutReceiptify/AboutReceiptifyPage';
+import ScanBulkUpload from './pages/scan/ScanBulkUpload';
+import ScanBulkReview from './pages/scan/ScanBulkReview';
 
 function App() {
   return (
@@ -19,10 +21,12 @@ function App() {
         <Route path="/scan" element={<ScanUpload />} />
         <Route path="/scan/review" element={<ScanReview />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/select-business" element={<BusinessPage/>} />
-        <Route path="/dashboard" element={<Dashboard/>} />
-        <Route path="/about-the-creators" element={<AboutTheCreatorsPage/>} />
+        <Route path="/select-business" element={<BusinessPage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/about-the-creators" element={<AboutTheCreatorsPage />} />
         <Route path="/about-receiptify" element={<AboutReceiptifyPage />} />
+        <Route path="/scan/bulk" element={<ScanBulkUpload />} />
+        <Route path="/scan/bulk/review" element={<ScanBulkReview />} />
       </Routes>
     </Router>
   );

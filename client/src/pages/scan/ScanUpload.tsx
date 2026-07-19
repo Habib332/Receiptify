@@ -198,9 +198,17 @@ export default function ScanUpload() {
 
     return (
         <Layout>
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Scan a receipt</h1>
-                <p className="text-sm text-gray-400 mt-1">Upload a photo or take a picture to get started.</p>
+            <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Scan a receipt</h1>
+                    <p className="text-sm text-gray-400 mt-1">Upload a photo or take a picture to get started.</p>
+                </div>
+                <button
+                    onClick={() => navigate('/scan/bulk')}
+                    className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                >
+                    Bulk upload instead
+                </button>
             </div>
 
             {/* Step indicator */}

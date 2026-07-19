@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Layout from '../../components/Layout'
-
+import DashboardHeroImage from '../../assets/Dashboard.png'
+import DeleteReceiptModal from './DeleteReceiptModal'
+import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal'
+import BusinessSelector, { type BusinessOption } from './BusinessSelector'
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // ---- Types (mirror the receipts.repository.js row shape) ----
 type VerificationStatus = 'pending' | 'verified' | 'rejected'
 type DuplicateStatus = 'none' | 'flagged' | 'confirmed_duplicate' | 'not_duplicate'
+type BusinessRole = 'owner' | 'manager' | 'staff'
 
 type Receipt = {
     receipt_id: string
+    business_id: string
     receiver_name: string | null // merchant / vendor being paid
     sender_name: string | null
     sender_bank: string | null
@@ -57,10 +62,25 @@ function formatDate(dateStr: string | null) {
     return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
 }
 
-const STATUS_STYLES: Record<VerificationStatus, string> = {
-    verified: 'text-green-700 bg-green-50',
-    pending: 'text-amber-700 bg-amber-50',
-    rejected: 'text-red-700 bg-red-50',
+// Duplicate status drives the Status column now.
+const DUPLICATE_STYLES: Record<DuplicateStatus, string> = {
+    none: 'text-gray-500 bg-gray-50',
+    flagged: 'text-orange-700 bg-orange-50',
+    confirmed_duplicate: 'text-red-700 bg-red-50',
+    not_duplicate: 'text-green-700 bg-green-50',
+}
+
+const DUPLICATE_LABELS: Record<DuplicateStatus, string> = {
+    none: 'Not a duplicate',
+    flagged: 'Possible duplicate',
+    confirmed_duplicate: 'Confirmed duplicate',
+    not_duplicate: 'Not a duplicate',
+}
+
+// Only owners/managers may edit or delete a receipt's details — staff can
+// view and upload but not modify or remove existing records.
+function canManageReceipts(role: BusinessRole | null) {
+    return role === 'owner' || role === 'manager'
 }
 
 const PAGE_SIZE = 5
@@ -68,8 +88,8 @@ const PAGE_SIZE = 5
 export default function Dashboard() {
     const [receipts, setReceipts] = useState<Receipt[]>([])
     // Unfiltered, all-confirmed-receipts list — used only to power the
-    // "This Month" chart and the status breakdown, so those stats stay
-    // stable regardless of whatever the table above is filtered to.
+    // "This Month" chart, so it stays stable regardless of whatever the
+    // table above is filtered to.
     const [allReceipts, setAllReceipts] = useState<Receipt[]>([])
     const [stats, setStats] = useState<Stats | null>(null)
 
@@ -77,8 +97,15 @@ export default function Dashboard() {
     const [statsLoading, setStatsLoading] = useState(false)
     const [error, setError] = useState('')
 
+    // Business selector — "all" shows receipts across every business the
+    // user belongs to; a specific id scopes everything to that business.
+    const [businesses, setBusinesses] = useState<BusinessOption[]>([])
+    const [businessesLoading, setBusinessesLoading] = useState(false)
+    const [selectedBusinessId, setSelectedBusinessId] = useState<string | 'all'>('all')
+
     // Filters — kept to fields the API actually supports
-    // (receipts.repository.js#searchReceiptsByBusiness).
+    // (receipts.repository.js#searchReceiptsByBusiness). Start/end date now
+    // live inside the filter panel alongside min/max amount.
     const [referenceSearch, setReferenceSearch] = useState('')
     const [dateFrom, setDateFrom] = useState('')
     const [dateTo, setDateTo] = useState('')
@@ -89,10 +116,49 @@ export default function Dashboard() {
     const [page, setPage] = useState(1)
     const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
+    // Delete confirmation
+    const [deletingReceipt, setDeletingReceipt] = useState<Receipt | null>(null)
+    const [deleteLoading, setDeleteLoading] = useState(false)
+
+    // Edit details modal
+    const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
+    const [editLoading, setEditLoading] = useState(false)
+
+    const fetchBusinesses = useCallback(async () => {
+        setBusinessesLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/business`, {
+                method: 'GET',
+                headers: jsonHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) throw new Error(data.message || 'Failed to load businesses')
+            setBusinesses(
+                (data.data || [])
+                    .map((b: any) => ({
+                        id: b.id ?? b.business_id,
+                        name: b.name,
+                        type: b.type,
+                        logoUrl: b.logoUrl ?? b.logo_url ?? null,
+                        userRole: b.userRole ?? b.user_role ?? null,
+                    }))
+                    // Only businesses the user actually belongs to are
+                    // relevant for a receipts filter.
+                    .filter((b: BusinessOption) => !!b.userRole)
+            )
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setBusinessesLoading(false)
+        }
+    }, [])
+
     const fetchStats = useCallback(async () => {
         setStatsLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/receipts/stats`, {
+            const params = new URLSearchParams()
+            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
+            const res = await fetch(`${API_BASE_URL}/receipts/stats?${params.toString()}`, {
                 method: 'GET',
                 headers: jsonHeaders(),
             })
@@ -104,13 +170,15 @@ export default function Dashboard() {
         } finally {
             setStatsLoading(false)
         }
-    }, [])
+    }, [selectedBusinessId])
 
-    // Unfiltered fetch (no query params) — GET /api/receipts with an
-    // empty query string hits getReceiptsForBusiness, not the search path.
+    // Unfiltered fetch (aside from business scope) — powers the "This
+    // Month" chart only.
     const fetchAllReceipts = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/receipts`, {
+            const params = new URLSearchParams()
+            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
+            const res = await fetch(`${API_BASE_URL}/receipts?${params.toString()}`, {
                 method: 'GET',
                 headers: jsonHeaders(),
             })
@@ -120,13 +188,14 @@ export default function Dashboard() {
         } catch (err) {
             console.error(err)
         }
-    }, [])
+    }, [selectedBusinessId])
 
     const fetchReceipts = useCallback(async () => {
         setLoading(true)
         setError('')
         try {
             const params = new URLSearchParams()
+            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
             if (referenceSearch.trim()) params.set('reference', referenceSearch.trim())
             if (dateFrom) params.set('dateFrom', dateFrom)
             if (dateTo) params.set('dateTo', dateTo)
@@ -146,7 +215,11 @@ export default function Dashboard() {
         } finally {
             setLoading(false)
         }
-    }, [referenceSearch, dateFrom, dateTo, minAmount, maxAmount])
+    }, [selectedBusinessId, referenceSearch, dateFrom, dateTo, minAmount, maxAmount])
+
+    useEffect(() => {
+        fetchBusinesses()
+    }, [fetchBusinesses])
 
     useEffect(() => {
         fetchStats()
@@ -163,9 +236,21 @@ export default function Dashboard() {
         fetchAllReceipts()
     }, [fetchStats, fetchAllReceipts])
 
+    // Role for whichever business a given receipt belongs to. When viewing
+    // "All Businesses", each row can belong to a different business, so
+    // this is resolved per-row rather than from a single selected role.
+    const roleForBusiness = useCallback(
+        (businessId: string): BusinessRole | null => {
+            const biz = businesses.find((b) => b.id === businessId)
+            return (biz?.userRole as BusinessRole | undefined) ?? null
+        },
+        [businesses]
+    )
+
     const handleDelete = async (id: string) => {
         setError('')
         setOpenMenuId(null)
+        setDeleteLoading(true)
         const prev = receipts
         setReceipts((p) => p.filter((r) => r.receipt_id !== id))
         try {
@@ -179,6 +264,9 @@ export default function Dashboard() {
         } catch (err) {
             setReceipts(prev)
             setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setDeleteLoading(false)
+            setDeletingReceipt(null)
         }
     }
 
@@ -194,24 +282,6 @@ export default function Dashboard() {
             window.open(data.data.signedUrl, '_blank', 'noopener,noreferrer')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Could not open receipt image')
-        }
-    }
-
-    const handleSetVerification = async (id: string, status: VerificationStatus) => {
-        setOpenMenuId(null)
-        setError('')
-        try {
-            const res = await fetch(`${API_BASE_URL}/receipts/${id}/verify`, {
-                method: 'PATCH',
-                headers: jsonHeaders(),
-                body: JSON.stringify({ status }),
-            })
-            const data = await res.json()
-            if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update verification status')
-            setReceipts((p) => p.map((r) => (r.receipt_id === id ? data.data : r)))
-            refreshAggregates()
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong')
         }
     }
 
@@ -233,16 +303,37 @@ export default function Dashboard() {
         }
     }
 
+    const handleSaveEdit = async (id: string, fields: EditableReceiptFields) => {
+        setError('')
+        setEditLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/receipts/${id}`, {
+                method: 'PATCH',
+                headers: jsonHeaders(),
+                body: JSON.stringify(fields),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update receipt')
+            setReceipts((p) => p.map((r) => (r.receipt_id === id ? data.data : r)))
+            refreshAggregates()
+            setEditingReceipt(null)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setEditLoading(false)
+        }
+    }
+
     const handleExportAll = () => {
         const rows = [
-            ['Date', 'Merchant', 'Reference', 'Amount', 'Currency', 'Status', 'Duplicate Status'],
+            ['Date', 'Receiver', 'Sender', 'Reference', 'Amount', 'Currency', 'Duplicate Status'],
             ...receipts.map((r) => [
                 r.receipt_date || '',
                 r.receiver_name || '',
+                r.sender_name || '',
                 r.transaction_reference || '',
                 r.amount || '',
                 r.currency,
-                r.verification_status,
                 r.duplicate_status,
             ]),
         ]
@@ -282,29 +373,19 @@ export default function Dashboard() {
         return { total, buckets, max, currency, count: inMonth.length }
     }, [allReceipts])
 
-    // ---- Spend breakdown by verification status, as percentages ----
-    const breakdown = useMemo(() => {
-        const totals: Record<VerificationStatus, number> = { verified: 0, pending: 0, rejected: 0 }
-        let grand = 0
-        allReceipts.forEach((r) => {
-            const amt = Number(r.amount || 0)
-            totals[r.verification_status] = (totals[r.verification_status] || 0) + amt
-            grand += amt
-        })
-        const pct = (v: number) => (grand > 0 ? Math.round((v / grand) * 100) : 0)
-        return {
-            grand,
-            currency: allReceipts[0]?.currency || 'PKR',
-            segments: [
-                { label: 'Verified', value: totals.verified, pct: pct(totals.verified), color: 'bg-green-500' },
-                { label: 'Pending', value: totals.pending, pct: pct(totals.pending), color: 'bg-amber-400' },
-                { label: 'Rejected', value: totals.rejected, pct: pct(totals.rejected), color: 'bg-red-400' },
-            ],
-        }
-    }, [allReceipts])
-
     const totalPages = Math.max(1, Math.ceil(receipts.length / PAGE_SIZE))
     const pageReceipts = receipts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+    const editInitial: EditableReceiptFields | null = editingReceipt
+        ? {
+              receiver_name: editingReceipt.receiver_name || '',
+              sender_name: editingReceipt.sender_name || '',
+              transaction_reference: editingReceipt.transaction_reference || '',
+              amount: editingReceipt.amount || '',
+              receipt_date: editingReceipt.receipt_date ? editingReceipt.receipt_date.slice(0, 10) : '',
+              notes: editingReceipt.notes || '',
+          }
+        : null
 
     return (
         <Layout>
@@ -354,15 +435,17 @@ export default function Dashboard() {
                         </button>
                     </div>
                 </div>
-                <div className="hidden md:flex items-center justify-center w-40 h-40 rounded-2xl bg-white/60 shrink-0">
-                    <svg className="w-20 h-20 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                <div className="hidden md:flex shrink-0 w-80 h-56 items-center justify-center">
+                   <img
+                        src={DashboardHeroImage}
+                        alt="Business owner managing businesses"
+                        className="w-full h-full object-contain"
+                    />
                 </div>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {/* Stats — Total Receipts, Total Amount, This Month */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <StatCard label="Total Receipts" value={statsLoading ? '—' : String(stats?.receiptCount ?? 0)} sub="Across your business" iconColor="blue" />
                 <StatCard label="Total Amount" value={statsLoading ? '—' : formatAmount(stats?.totalSpent ?? 0, 'PKR')} sub="Across all receipts" iconColor="green" />
 
@@ -384,29 +467,17 @@ export default function Dashboard() {
                         ))}
                     </div>
                 </div>
-
-                {/* Spend breakdown by verification status, as percentages */}
-                <div className="border border-gray-100 rounded-2xl p-4 flex flex-col gap-2">
-                    <span className="text-xs text-gray-400">Spend Breakdown</span>
-                    <div className="text-xl font-bold text-gray-900">{formatAmount(breakdown.grand, breakdown.currency)}</div>
-                    <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden flex mt-1">
-                        {breakdown.segments.map((s) => (
-                            <div key={s.label} className={s.color} style={{ width: `${s.pct}%` }} title={`${s.label}: ${s.pct}%`} />
-                        ))}
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                        {breakdown.segments.map((s) => (
-                            <span key={s.label} className="text-[11px] text-gray-400 flex items-center gap-1">
-                                <span className={`w-1.5 h-1.5 rounded-full ${s.color}`} />
-                                {s.label} {s.pct}%
-                            </span>
-                        ))}
-                    </div>
-                </div>
             </div>
 
-            {/* Search & filters */}
-            <div className="flex flex-wrap items-end gap-3 mb-4">
+            {/* Business selector + search & filters */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+                <BusinessSelector
+                    businesses={businesses}
+                    selectedId={selectedBusinessId}
+                    onChange={setSelectedBusinessId}
+                    loading={businessesLoading}
+                />
+
                 <div className="relative flex-1 min-w-[220px]">
                     <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
@@ -418,25 +489,6 @@ export default function Dashboard() {
                         className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                     />
                 </div>
-
-                <label className="text-xs text-gray-400">
-                    <span className="block mb-1">Start date</span>
-                    <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-blue-200"
-                    />
-                </label>
-                <label className="text-xs text-gray-400">
-                    <span className="block mb-1">End date</span>
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-blue-200"
-                    />
-                </label>
 
                 <button
                     onClick={() => setShowFilterPanel((v) => !v)}
@@ -450,7 +502,25 @@ export default function Dashboard() {
             </div>
 
             {showFilterPanel && (
-                <div className="border border-gray-100 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="border border-gray-100 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <label className="text-xs text-gray-500">
+                        Start date
+                        <input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-blue-200"
+                        />
+                    </label>
+                    <label className="text-xs text-gray-500">
+                        End date
+                        <input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 outline-none focus:ring-2 focus:ring-blue-200"
+                        />
+                    </label>
                     <label className="text-xs text-gray-500">
                         Min amount
                         <input
@@ -469,7 +539,7 @@ export default function Dashboard() {
                             className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                         />
                     </label>
-                    <div className="flex items-end">
+                    <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
                         <button
                             onClick={() => {
                                 setReferenceSearch('')
@@ -496,17 +566,19 @@ export default function Dashboard() {
                     <thead>
                         <tr className="border-b border-gray-100 text-left text-xs text-gray-400">
                             <th className="font-medium px-5 py-3">Date</th>
-                            <th className="font-medium px-5 py-3">Merchant</th>
+                            <th className="font-medium px-5 py-3">Receiver</th>
+                            <th className="font-medium px-5 py-3">Sender</th>
                             <th className="font-medium px-5 py-3">Reference</th>
                             <th className="font-medium px-5 py-3">Amount</th>
                             <th className="font-medium px-5 py-3">Status</th>
+                            <th className="font-medium px-5 py-3">Screenshot</th>
                             <th className="px-5 py-3" />
                         </tr>
                     </thead>
                     <tbody>
                         {loading && receipts.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
+                                <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
                                     Loading receipts...
                                 </td>
                             </tr>
@@ -514,87 +586,109 @@ export default function Dashboard() {
 
                         {!loading && receipts.length === 0 && (
                             <tr>
-                                <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-400">
+                                <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
                                     No receipts found.
                                 </td>
                             </tr>
                         )}
 
-                        {pageReceipts.map((row) => (
-                            <tr key={row.receipt_id} className="hover:bg-gray-50/50 transition-colors">
-                                <td className="px-5 py-3.5 text-gray-500">{formatDate(row.receipt_date)}</td>
-                                <td className="px-5 py-3.5">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
-                                            <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
-                                            </svg>
+                        {pageReceipts.map((row) => {
+                            const role = roleForBusiness(row.business_id)
+                            const canManage = canManageReceipts(role)
+                            return (
+                                <tr key={row.receipt_id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-5 py-3.5 text-gray-500">{formatDate(row.receipt_date)}</td>
+                                    <td className="px-5 py-3.5">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-gray-700">{row.receiver_name || 'Unknown'}</span>
                                         </div>
-                                        <span className="text-gray-700">{row.receiver_name || 'Unknown'}</span>
-                                    </div>
-                                </td>
-                                <td className="px-5 py-3.5 text-gray-500">{row.transaction_reference || '—'}</td>
-                                <td className="px-5 py-3.5 text-gray-700 font-medium">{formatAmount(row.amount, row.currency)}</td>
-                                <td className="px-5 py-3.5">
-                                    <span className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 ${STATUS_STYLES[row.verification_status]}`}>
-                                        {row.verification_status}
-                                    </span>
-                                    {row.duplicate_status === 'flagged' && (
-                                        <span className="ml-1.5 inline-block text-xs font-medium text-orange-700 bg-orange-50 rounded-full px-2.5 py-1">
-                                            duplicate?
+                                    </td>
+                                    <td className="px-5 py-3.5 text-gray-700">{row.sender_name || 'Unknown'}</td>
+                                    <td className="px-5 py-3.5 text-gray-500">{row.transaction_reference || '—'}</td>
+                                    <td className="px-5 py-3.5 text-gray-700 font-medium">{formatAmount(row.amount, row.currency)}</td>
+                                    <td className="px-5 py-3.5">
+                                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 ${DUPLICATE_STYLES[row.duplicate_status]}`}>
+                                            {DUPLICATE_LABELS[row.duplicate_status]}
                                         </span>
-                                    )}
-                                </td>
-                                <td className="px-5 py-3.5 text-right relative">
-                                    <div className="flex items-center justify-end gap-2">
+                                    </td>
+                                    <td className="px-5 py-3.5">
                                         <button
                                             onClick={() => handleView(row.receipt_id)}
                                             disabled={!row.image_url}
                                             title={row.image_url ? 'View screenshot' : 'No screenshot attached'}
-                                            className="text-gray-300 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-gray-300 transition-colors"
+                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
                                         >
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
+                                            View Screenshot
                                         </button>
-                                        <button
-                                            onClick={() => setOpenMenuId(openMenuId === row.receipt_id ? null : row.receipt_id)}
-                                            className="text-gray-300 hover:text-gray-600 transition-colors"
-                                        >
-                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d="M12 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM12 21a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
-                                            </svg>
-                                        </button>
-                                    </div>
-
-                                    {openMenuId === row.receipt_id && (
-                                        <div className="absolute right-5 top-11 z-10 w-48 bg-white border border-gray-100 rounded-xl shadow-lg py-1 text-left">
-                                            <button onClick={() => handleSetVerification(row.receipt_id, 'verified')} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                                                Mark verified
-                                            </button>
-                                            <button onClick={() => handleSetVerification(row.receipt_id, 'rejected')} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                                                Mark rejected
-                                            </button>
-                                            {row.duplicate_status === 'flagged' && (
-                                                <>
-                                                    <button onClick={() => handleResolveDuplicate(row.receipt_id, true)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                                                        Confirm duplicate
-                                                    </button>
-                                                    <button onClick={() => handleResolveDuplicate(row.receipt_id, false)} className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
-                                                        Not a duplicate
-                                                    </button>
-                                                </>
-                                            )}
-                                            <div className="border-t border-gray-100 my-1" />
-                                            <button onClick={() => handleDelete(row.receipt_id)} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50">
-                                                Delete receipt
+                                    </td>
+                                    <td className="px-5 py-3.5 text-right relative">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => setOpenMenuId(openMenuId === row.receipt_id ? null : row.receipt_id)}
+                                                className="text-gray-300 hover:text-gray-600 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M12 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM12 21a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                                                </svg>
                                             </button>
                                         </div>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
+
+                                        {openMenuId === row.receipt_id && (
+                                            <div className="absolute right-5 top-11 z-10 w-52 bg-white border border-gray-100 rounded-xl shadow-lg py-1 text-left">
+                                                {canManage && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setOpenMenuId(null)
+                                                            setEditingReceipt(row)
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                                                    >
+                                                        Edit details
+                                                    </button>
+                                                )}
+
+                                                {row.duplicate_status === 'flagged' && (
+                                                    <button
+                                                        onClick={() => handleResolveDuplicate(row.receipt_id, false)}
+                                                        className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                                                    >
+                                                        Unflag as duplicate
+                                                    </button>
+                                                )}
+
+                                                {canManage && (
+                                                    <>
+                                                        <div className="border-t border-gray-100 my-1" />
+                                                        <button
+                                                            onClick={() => {
+                                                                setOpenMenuId(null)
+                                                                setDeletingReceipt(row)
+                                                            }}
+                                                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50"
+                                                        >
+                                                            Delete receipt
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {!canManage && row.duplicate_status !== 'flagged' && (
+                                                    <div className="px-4 py-2 text-xs text-gray-400">No actions available</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -634,6 +728,28 @@ export default function Dashboard() {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {deletingReceipt && (
+                <DeleteReceiptModal
+                    receiptLabel={deletingReceipt.receiver_name || deletingReceipt.transaction_reference || 'this receipt'}
+                    loading={deleteLoading}
+                    onConfirm={() => handleDelete(deletingReceipt.receipt_id)}
+                    onClose={() => {
+                        if (!deleteLoading) setDeletingReceipt(null)
+                    }}
+                />
+            )}
+
+            {editingReceipt && editInitial && (
+                <EditReceiptModal
+                    initial={editInitial}
+                    loading={editLoading}
+                    onSave={(fields) => handleSaveEdit(editingReceipt.receipt_id, fields)}
+                    onClose={() => {
+                        if (!editLoading) setEditingReceipt(null)
+                    }}
+                />
             )}
         </Layout>
     )
