@@ -4,6 +4,7 @@ import DashboardHeroImage from '../../assets/Dashboard.png'
 import DeleteReceiptModal from './DeleteReceiptModal'
 import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal'
 import BusinessSelector, { type BusinessOption } from './BusinessSelector'
+import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // ---- Types (mirror the receipts.repository.js row shape) ----
@@ -49,6 +50,14 @@ function getToken() {
 
 function setToken(token: string) {
     sessionStorage.setItem('token', token)
+}
+
+function authHeaders() {
+    const token = getToken()
+    return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
 }
 
 function jsonHeaders() {
@@ -149,6 +158,11 @@ export default function Dashboard() {
     const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
     const [editLoading, setEditLoading] = useState(false)
 
+    // Notifications: owners/managers get notified when someone joins their
+    // business. Bell icon opens a modal listing them; badge shows unread count.
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [notifications, setNotifications] = useState<NotificationItem[]>([])
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
     // GET /business already returns each business the user belongs to
     // with its role attached (see BusinessesPage.tsx's normalization),
     // so this list doubles as both "what shows in the dropdown" and
@@ -179,7 +193,63 @@ export default function Dashboard() {
             setBusinessesLoading(false)
         }
     }, [])
+    const handleMarkNotificationRead = async (id: string) => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notification as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
 
+    const handleMarkAllNotificationsRead = async () => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => ({ ...n, read: true })))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notifications as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    // Called by NotificationsModal after it approves/rejects a join request
+    // inline. Flip the joinRequest status locally, then refresh whatever the
+    // business selector is currently pointed at — since an approval can
+    // change receipt/role counts.
+    const handleNotificationDecisionMade = async (notificationId: string, decision: 'approve' | 'reject') => {
+        setNotifications((prev) =>
+            prev.map((n) =>
+                n.id === notificationId && n.joinRequest
+                    ? {
+                        ...n,
+                        read: true,
+                        joinRequest: {
+                            ...n.joinRequest,
+                            status: decision === 'approve' ? 'approved' : 'rejected',
+                        },
+                    }
+                    : n
+            )
+        )
+        await refreshForCurrentSelection()
+    }
     // Exchanges the current session token for one scoped to `businessId`
     // via POST /auth/select-business, and stores the result. Every
     // subsequent /receipts* call automatically picks up the new scope
@@ -256,7 +326,48 @@ export default function Dashboard() {
             setLoading(false)
         }
     }, [referenceSearch, dateFrom, dateTo, minAmount, maxAmount])
+    const fetchNotifications = useCallback(async () => {
+        setNotificationsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications`, {
+                method: 'GET',
+                headers: authHeaders(),
+            })
 
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load notifications')
+            }
+
+            setNotifications(
+                (data.data || []).map((n: any) => ({
+                    ...n,
+                    id: n.id ?? n.notification_id,
+                    businessName: n.businessName ?? n.business_name ?? null,
+                    actorName: n.actorName ?? n.actor_name ?? null,
+                    actorEmail: n.actorEmail ?? n.actor_email ?? null,
+                    createdAt: n.createdAt ?? n.created_at,
+                    read: n.read ?? n.is_read ?? false,
+                }))
+            )
+        } catch (err) {
+            // Notifications failure shouldn't block the page
+            console.error(err)
+        } finally {
+            setNotificationsLoading(false)
+        }
+    }, [])
+
+    // Load notifications on mount and poll periodically so the bell badge
+    // stays current even if the user leaves the tab idle.
+    useEffect(() => {
+        fetchNotifications()
+        const interval = setInterval(fetchNotifications, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifications])
+
+    const unreadNotificationCount = notifications.filter((n) => !n.read).length
     // "All Businesses": there's no backend session that spans more than
     // one business, so this loops select-business -> fetch -> repeat for
     // every business the user belongs to and merges the results
@@ -540,13 +651,13 @@ export default function Dashboard() {
 
     const editInitial: EditableReceiptFields | null = editingReceipt
         ? {
-              receiver_name: editingReceipt.receiver_name || '',
-              sender_name: editingReceipt.sender_name || '',
-              transaction_reference: editingReceipt.transaction_reference || '',
-              amount: editingReceipt.amount || '',
-              receipt_date: editingReceipt.receipt_date ? editingReceipt.receipt_date.slice(0, 10) : '',
-              notes: editingReceipt.notes || '',
-          }
+            receiver_name: editingReceipt.receiver_name || '',
+            sender_name: editingReceipt.sender_name || '',
+            transaction_reference: editingReceipt.transaction_reference || '',
+            amount: editingReceipt.amount || '',
+            receipt_date: editingReceipt.receipt_date ? editingReceipt.receipt_date.slice(0, 10) : '',
+            notes: editingReceipt.notes || '',
+        }
         : null
 
     return (
@@ -556,11 +667,21 @@ export default function Dashboard() {
                     <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
                     <p className="text-sm text-gray-400 mt-1">View, search and manage all your scanned receipts.</p>
                 </div>
-                <button className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors">
+                <button
+                    onClick={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
+                >
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                     </svg>
-                    <span className="absolute top-1.5 right-2 w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                    {unreadNotificationCount > 0 && (
+                        <span className="absolute top-1 right-1.5 min-w-[14px] h-[14px] px-0.5 bg-red-500 rounded-full text-[9px] leading-[14px] text-white text-center">
+                            {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                        </span>
+                    )}
                 </button>
             </div>
 
@@ -598,7 +719,7 @@ export default function Dashboard() {
                     </div>
                 </div>
                 <div className="hidden md:flex shrink-0 w-80 h-56 items-center justify-center">
-                   <img
+                    <img
                         src={DashboardHeroImage}
                         alt="Business owner managing businesses"
                         className="w-full h-full object-contain"
@@ -876,9 +997,8 @@ export default function Dashboard() {
                             <button
                                 key={p}
                                 onClick={() => setPage(p)}
-                                className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs ${
-                                    p === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'
-                                }`}
+                                className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs ${p === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'
+                                    }`}
                             >
                                 {p}
                             </button>
@@ -913,6 +1033,17 @@ export default function Dashboard() {
                     onClose={() => {
                         if (!editLoading) setEditingReceipt(null)
                     }}
+                />
+            )}
+
+            {showNotifications && (
+                <NotificationsModal
+                    notifications={notifications}
+                    loading={notificationsLoading}
+                    onClose={() => setShowNotifications(false)}
+                    onMarkRead={handleMarkNotificationRead}
+                    onMarkAllRead={handleMarkAllNotificationsRead}
+                    onDecisionMade={handleNotificationDecisionMade}
                 />
             )}
         </Layout>
