@@ -73,8 +73,10 @@ function formatDate(dateStr: string | null) {
 }
 
 // Duplicate status drives the Status column now.
+// "none" and "not_duplicate" are both treated as a clean/no-issue state,
+// so they share the same green styling.
 const DUPLICATE_STYLES: Record<DuplicateStatus, string> = {
-    none: 'text-gray-500 bg-gray-50',
+    none: 'text-green-700 bg-green-50',
     flagged: 'text-orange-700 bg-orange-50',
     confirmed_duplicate: 'text-red-700 bg-red-50',
     not_duplicate: 'text-green-700 bg-green-50',
@@ -768,14 +770,7 @@ export default function Dashboard() {
                                 <tr key={row.receipt_id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="px-5 py-3.5 text-gray-500">{formatDate(row.receipt_date)}</td>
                                     <td className="px-5 py-3.5">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="w-8 h-8 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
-                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
-                                                </svg>
-                                            </div>
-                                            <span className="text-gray-700">{row.receiver_name || 'Unknown'}</span>
-                                        </div>
+                                        <span className="text-gray-700">{row.receiver_name || 'Unknown'}</span>
                                     </td>
                                     <td className="px-5 py-3.5 text-gray-700">{row.sender_name || 'Unknown'}</td>
                                     <td className="px-5 py-3.5 text-gray-500">{row.transaction_reference || '—'}</td>
