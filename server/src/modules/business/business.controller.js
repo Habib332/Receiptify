@@ -142,6 +142,17 @@ async function joinBusiness(req, res, next) {
   }
 }
 
+async function getBusinessMembers(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId } = req.params;
+    const result = await businessService.getBusinessMembers({ userId, businessId });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
 
 module.exports = {
   createBusiness,
@@ -152,6 +163,7 @@ module.exports = {
   uploadLogo,
   listBusinesses,
   joinBusiness,
+  getBusinessMembers,
 };
 
 

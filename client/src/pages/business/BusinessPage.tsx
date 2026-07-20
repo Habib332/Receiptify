@@ -9,6 +9,7 @@ import TypeFilterDropdown from './TypeFilterDropdown'
 import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
 import DeleteConfirmModal from './DeleteConfirmModal'
+import TeamModal from './TeamModel'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -76,6 +77,8 @@ export default function BusinessesPage() {
     const [pendingRequestBusinessIds, setPendingRequestBusinessIds] = useState<Set<string>>(new Set())
     const [deletingBusiness, setDeletingBusiness] = useState<Business | null>(null)
     const [deleteLoading, setDeleteLoading] = useState(false)
+    const [viewingTeamBusiness, setViewingTeamBusiness] = useState<Business | null>(null)
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
@@ -215,6 +218,15 @@ export default function BusinessesPage() {
     // what's currently loaded; the API value is used only if we have no
     // businesses loaded yet (e.g. right after login, before the list fetch
     // resolves) so the card doesn't flash 0.
+    // Close the row action menu on outside click, since it's a lightweight
+    // dropdown rather than a modal (no backdrop to catch the click).
+    useEffect(() => {
+        if (!openMenuId) return
+        const handleClick = () => setOpenMenuId(null)
+        document.addEventListener('click', handleClick)
+        return () => document.removeEventListener('click', handleClick)
+    }, [openMenuId])
+
     const distinctTypeCount = useMemo(() => {
         const unique = new Set(businesses.map((b) => b.type).filter(Boolean))
         return unique.size
@@ -660,14 +672,51 @@ export default function BusinessesPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                                     </svg>
                                 </button>
-                                <button
-                                    onClick={() => setDeletingBusiness(biz)}
-                                    className="w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:text-red-600 flex items-center justify-center transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                    </svg>
-                                </button>
+                                <div className="relative">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setOpenMenuId(openMenuId === biz.id ? null : biz.id)
+                                        }}
+                                        className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 6.75a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
+                                        </svg>
+                                    </button>
+
+                                    {openMenuId === biz.id && (
+                                        <div
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="absolute right-0 top-9 w-40 bg-white border border-gray-100 rounded-xl shadow-lg py-1.5 z-10"
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    setViewingTeamBusiness(biz)
+                                                    setOpenMenuId(null)
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.94-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.06 2.772m0 0A6.001 6.001 0 006 18.719m6-15.219a3.75 3.75 0 100 7.5 3.75 3.75 0 000-7.5zm-8.25 5.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" />
+                                                </svg>
+                                                View team
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setDeletingBusiness(biz)
+                                                    setOpenMenuId(null)
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                                </svg>
+                                                Delete
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )
@@ -713,6 +762,14 @@ export default function BusinessesPage() {
                     onMarkRead={handleMarkNotificationRead}
                     onMarkAllRead={handleMarkAllNotificationsRead}
                     onDecisionMade={handleNotificationDecisionMade}
+                />
+            )}
+
+            {viewingTeamBusiness && (
+                <TeamModal
+                    businessId={viewingTeamBusiness.id}
+                    businessName={viewingTeamBusiness.name}
+                    onClose={() => setViewingTeamBusiness(null)}
                 />
             )}
 

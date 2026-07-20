@@ -205,6 +205,30 @@ async function getDashboardStats() {
 // removed — replaced by the request/approve flow in
 // businessJoinRequests.service.js. See POST /:businessId/join-requests.
 
+// Team roster — any existing member (owner, manager, or staff) can view
+// who else is on the team. This is a read of membership info, not a
+// mutation, so it uses the same "must belong to this business" check as
+// assertCanModifyBusiness's membership lookup, but without restricting to
+// owner/manager roles.
+async function getBusinessMembers({ userId, businessId }) {
+  const existing = await businessRepository.findBusinessById(businessId);
+
+  if (!existing) {
+    throw new ApiError(404, "Business not found");
+  }
+
+  const membership = await businessRepository.getUserRoleForBusiness({
+    userId,
+    businessId,
+  });
+
+  if (!membership) {
+    throw new ApiError(403, "You do not belong to this business");
+  }
+
+  return businessRepository.getBusinessMembers({ businessId });
+}
+
 module.exports = {
   createBusiness,
   updateBusiness,
@@ -212,4 +236,5 @@ module.exports = {
   uploadLogo,
   listBusinesses,
   getDashboardStats,
+  getBusinessMembers,
 };

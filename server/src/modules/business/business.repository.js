@@ -195,6 +195,28 @@ async function findOwnersAndManagers({ businessId }) {
   return result.rows;
 }
 
+// Full team roster for a business — owner, managers, and staff — with the
+// user details the "View team" modal needs. Ordered so owner comes first,
+// then managers, then staff, and alphabetically by name within each role;
+// this mirrors how the frontend already sorts, but doing it in SQL means
+// the API response is meaningful even without client-side re-sorting.
+async function getBusinessMembers({ businessId }) {
+  const result = await pool.query(
+    `SELECT bu.user_id, bu.role, bu.joined_at, u.name, u.email, u.avatar_url
+     FROM business_users bu
+     JOIN users u ON u.user_id = bu.user_id
+     WHERE bu.business_id = $1
+     ORDER BY
+       CASE bu.role
+         WHEN 'owner' THEN 0
+         WHEN 'manager' THEN 1
+         ELSE 2
+       END,
+       u.name ASC`,
+    [businessId],
+  );
+  return result.rows;
+}
 
 module.exports = {
   createBusiness,
@@ -211,4 +233,5 @@ module.exports = {
   getUserRolesForBusinesses,
   joinBusinessAsStaff,
   findOwnersAndManagers,
+  getBusinessMembers,
 };

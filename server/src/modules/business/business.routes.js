@@ -39,6 +39,11 @@ router.post(
   businessController.uploadLogo,
 );
 
+router.get(
+  "/:businessId/members",
+  authMiddleware,
+  businessController.getBusinessMembers,
+);
 // --- Join-request flow (replaces the old instant-join /:businessId/join) ---
 // Requesting to join doesn't require existing membership, so no role check
 // here — ownership of the *review* actions is checked per-business inside
