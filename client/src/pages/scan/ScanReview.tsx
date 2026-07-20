@@ -73,7 +73,7 @@ export default function ScanReview() {
 
     // "Business" is just the receiver — the payee/vendor on the receipt.
     // Single field now; there's no separate vendor_name column anymore.
-    const [receiverName, setReceiverName] = useState(initialReceipt.receiver_name || '')
+    const [receiverName, setReceiverName] = useState((initialReceipt.receiver_name || '').toUpperCase())
     const [amount, setAmount] = useState(
         initialReceipt.amount != null ? String(initialReceipt.amount) : '',
     )
@@ -81,7 +81,7 @@ export default function ScanReview() {
     const [notes, setNotes] = useState(initialReceipt.notes || '')
 
     // Sender / receiver-bank details from the transfer-style OCR schema
-    const [senderName, setSenderName] = useState(initialReceipt.sender_name || '')
+    const [senderName, setSenderName] = useState((initialReceipt.sender_name || '').toUpperCase())
     const [senderBank, setSenderBank] = useState(initialReceipt.sender_bank || '')
     const [receiverBank, setReceiverBank] = useState(initialReceipt.receiver_bank || '')
     const [transactionReference, setTransactionReference] = useState(
@@ -162,7 +162,7 @@ export default function ScanReview() {
                 setReceipt(updated)
 
                 if (!touched.current.receiverName && updated.receiver_name) {
-                    setReceiverName(updated.receiver_name)
+                    setReceiverName(updated.receiver_name.toUpperCase())
                 }
                 if (!touched.current.amount && updated.amount != null) {
                     setAmount(String(updated.amount))
@@ -171,7 +171,7 @@ export default function ScanReview() {
                     setDate(toDateInputValue(updated.receipt_date))
                 }
                 if (!touched.current.senderName && updated.sender_name) {
-                    setSenderName(updated.sender_name)
+                    setSenderName(updated.sender_name.toUpperCase())
                 }
                 if (!touched.current.senderBank && updated.sender_bank) {
                     setSenderBank(updated.sender_bank)
@@ -250,11 +250,11 @@ export default function ScanReview() {
                     ...authHeaders(),
                 },
                 body: JSON.stringify({
-                    receiverName: receiverName.trim(),
+                    receiverName: receiverName.trim().toUpperCase(),
                     amount: Number(amount),
                     receiptDate: date,
                     notes: notes.trim(),
-                    senderName: senderName.trim() || undefined,
+                    senderName: senderName.trim().toUpperCase() || undefined,
                     senderBank: senderBank.trim() || undefined,
                     receiverBank: receiverBank.trim() || undefined,
                     transactionReference: transactionReference.trim() || undefined,
@@ -414,7 +414,7 @@ export default function ScanReview() {
                                         value={receiverName}
                                         onChange={(e) => {
                                             touched.current.receiverName = true
-                                            setReceiverName(e.target.value)
+                                            setReceiverName(e.target.value.toUpperCase())
                                         }}
                                         placeholder="Who was paid"
                                         className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none transition-shadow focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400"
@@ -440,7 +440,7 @@ export default function ScanReview() {
                                         value={senderName}
                                         onChange={(e) => {
                                             touched.current.senderName = true
-                                            setSenderName(e.target.value)
+                                            setSenderName(e.target.value.toUpperCase())
                                         }}
                                         placeholder="Who sent it"
                                         className="w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none transition-shadow focus:ring-2 focus:ring-blue-200 placeholder:text-gray-400"

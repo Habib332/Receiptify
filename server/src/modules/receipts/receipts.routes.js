@@ -52,7 +52,7 @@ router.post(
 router.patch(
   "/:receiptId",
   authMiddleware,
-  allowRoles("owner", "manager"),
+  allowRoles("owner", "manager","staff"),
   validate(updateReceipt),
   receiptsController.updateReceipt,
 );

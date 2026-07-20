@@ -1,3 +1,4 @@
+// ScanReview.tsx
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../../components/Layout'
@@ -13,11 +14,13 @@ function authHeaders() {
     return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-// Matches the raw `SELECT * FROM receipts` row shape (pool.query results
-// aren't camelCased) — same shape ScanReview.tsx works with.
+// Matches the raw `SELECT * FROM receipts` row shape returned by
+// receipts.repository.js (pool.query results are NOT camelCased —
+// these are the literal Postgres column names).
 interface Receipt {
     receipt_id: number | string
     amount: string | number | null
+    currency: string
     receipt_date: string | null
     notes: string | null
     image_url: string | null
@@ -30,62 +33,66 @@ interface Receipt {
 }
 
 type LocationState = {
-    receipts?: Receipt[]
+    receipt?: Receipt
 }
-
-type ReceiptOutcome = 'pending' | 'saved' | 'skipped'
 
 function toDateInputValue(value: string | null | undefined) {
     if (!value) return ''
+    // receipt_date may come back as a full ISO timestamp; <input type="date">
+    // wants just YYYY-MM-DD
     return value.slice(0, 10)
 }
 
+// OCR runs fire-and-forget on the backend (runOcrForReceipt is kicked off
+// after POST /receipts already responds) — so the receipt object we get
+// from router state is a snapshot from before OCR finishes. We poll
+// GET /receipts/:id until amount + receipt_date are populated (or we give
+// up) rather than relying on that one-time snapshot forever.
 const POLL_INTERVAL_MS = 2500
 const POLL_TIMEOUT_MS = 30000
 
-export default function ScanBulkReview() {
+export default function ScanReview() {
     const navigate = useNavigate()
     const location = useLocation()
     const state = (location.state as LocationState) || {}
-    const initialReceipts = state.receipts
+    const initialReceipt = state.receipt
 
-    // Nothing to review (direct nav, refresh, or a batch that produced
-    // zero receipts) — bounce back rather than showing an empty wizard.
-    if (!initialReceipts || initialReceipts.length === 0) {
-        navigate('/scan/bulk', { replace: true })
+    // If someone lands here directly (refresh, back button) with no
+    // receipt in router state, there's nothing to review — bounce back
+    // to the upload step rather than showing fabricated placeholder data.
+    if (!initialReceipt) {
+        navigate('/scan', { replace: true })
         return null
     }
 
-    const [receipts] = useState<Receipt[]>(initialReceipts)
-    const [currentIndex, setCurrentIndex] = useState(0)
-    const [outcomes, setOutcomes] = useState<ReceiptOutcome[]>(
-        () => initialReceipts.map(() => 'pending'),
+    const [receipt, setReceipt] = useState<Receipt>(initialReceipt)
+    const [polling, setPolling] = useState(
+        initialReceipt.amount == null || initialReceipt.receipt_date == null,
     )
-
-    const total = receipts.length
-    const receipt = receipts[currentIndex]
-    const savedCount = outcomes.filter((o) => o === 'saved').length
-    const skippedCount = outcomes.filter((o) => o === 'skipped').length
-
-    const [receiverName, setReceiverName] = useState('')
-    const [amount, setAmount] = useState('')
-    const [date, setDate] = useState('')
-    const [notes, setNotes] = useState('')
-    const [senderName, setSenderName] = useState('')
-    const [senderBank, setSenderBank] = useState('')
-    const [receiverBank, setReceiverBank] = useState('')
-    const [transactionReference, setTransactionReference] = useState('')
-
-    const [polling, setPolling] = useState(true)
     const [pollTimedOut, setPollTimedOut] = useState(false)
-    const [duplicateStatus, setDuplicateStatus] = useState<Receipt['duplicate_status']>(null)
+
+    // "Business" is just the receiver — the payee/vendor on the receipt.
+    // Single field now; there's no separate vendor_name column anymore.
+    const [receiverName, setReceiverName] = useState(initialReceipt.receiver_name || '')
+    const [amount, setAmount] = useState(
+        initialReceipt.amount != null ? String(initialReceipt.amount) : '',
+    )
+    const [date, setDate] = useState(toDateInputValue(initialReceipt.receipt_date))
+    const [notes, setNotes] = useState(initialReceipt.notes || '')
+
+    // Sender / receiver-bank details from the transfer-style OCR schema
+    const [senderName, setSenderName] = useState(initialReceipt.sender_name || '')
+    const [senderBank, setSenderBank] = useState(initialReceipt.sender_bank || '')
+    const [receiverBank, setReceiverBank] = useState(initialReceipt.receiver_bank || '')
+    const [transactionReference, setTransactionReference] = useState(
+        initialReceipt.transaction_reference || '',
+    )
 
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
 
-    const [imageUrl, setImageUrl] = useState<string | null>(null)
-    const [imageError, setImageError] = useState(false)
-
+    // Track which fields the user has actually touched, so a poll update
+    // never clobbers something they've already typed over.
     const touched = useRef({
         receiverName: false,
         amount: false,
@@ -97,50 +104,26 @@ export default function ScanBulkReview() {
         transactionReference: false,
     })
 
-    // Re-seed all local form state whenever we step to a different
-    // receipt in the batch — each one gets a clean form and its own
-    // "touched" tracking, same as ScanReview does for a single receipt.
-    useEffect(() => {
-        const r = receipts[currentIndex]
-        touched.current = {
-            receiverName: false,
-            amount: false,
-            date: false,
-            notes: false,
-            senderName: false,
-            senderBank: false,
-            receiverBank: false,
-            transactionReference: false,
-        }
-        setReceiverName(r.receiver_name || '')
-        setAmount(r.amount != null ? String(r.amount) : '')
-        setDate(toDateInputValue(r.receipt_date))
-        setNotes(r.notes || '')
-        setSenderName(r.sender_name || '')
-        setSenderBank(r.sender_bank || '')
-        setReceiverBank(r.receiver_bank || '')
-        setTransactionReference(r.transaction_reference || '')
-        setDuplicateStatus(r.duplicate_status)
-        setPolling(r.amount == null || r.receipt_date == null)
-        setPollTimedOut(false)
-        setError('')
-        setImageUrl(null)
-        setImageError(false)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentIndex])
+    // The receipt's image_url field (set by the backend) is only ever a
+    // private Supabase Storage PATH — e.g. "42/173-abc.png" — never a
+    // directly-viewable URL. Viewing it requires a short-lived signed URL,
+    // fetched on demand from GET /receipts/:id/image-url and never cached
+    // beyond this component's lifetime (see receiptsStorage.js).
+    const [imageUrl, setImageUrl] = useState<string | null>(null)
+    const [imageError, setImageError] = useState(false)
 
-    // Signed image URL, same pattern as ScanReview — fetched per receipt,
-    // never cached beyond this component.
     useEffect(() => {
         if (!receipt.image_url) return
+
         let cancelled = false
         setImageError(false)
 
         const fetchImageUrl = async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/receipts/${receipt.receipt_id}/image-url`, {
-                    headers: authHeaders(),
-                })
+                const res = await fetch(
+                    `${API_BASE_URL}/receipts/${receipt.receipt_id}/image-url`,
+                    { headers: authHeaders() },
+                )
                 const result = await res.json()
                 if (!res.ok || !result.success) throw new Error()
                 if (!cancelled) setImageUrl(result.data.signedUrl)
@@ -150,18 +133,19 @@ export default function ScanBulkReview() {
         }
 
         fetchImageUrl()
+
         return () => {
             cancelled = true
         }
+        // Re-fetch if the receipt swaps to a different image (e.g. once
+        // OCR polling below replaces `receipt` with an updated row).
     }, [receipt.receipt_id, receipt.image_url])
 
-    // OCR poll for the current receipt only. Stops immediately if the
-    // user steps away (index change unmounts this effect via cleanup).
     useEffect(() => {
         if (!polling) return
+
         let cancelled = false
         const startedAt = Date.now()
-        let timer: ReturnType<typeof setTimeout>
 
         const tick = async () => {
             if (cancelled) return
@@ -175,17 +159,32 @@ export default function ScanBulkReview() {
                 const updated: Receipt = result.data
                 if (cancelled) return
 
-                if (!touched.current.receiverName && updated.receiver_name) setReceiverName(updated.receiver_name)
-                if (!touched.current.amount && updated.amount != null) setAmount(String(updated.amount))
-                if (!touched.current.date && updated.receipt_date) setDate(toDateInputValue(updated.receipt_date))
-                if (!touched.current.senderName && updated.sender_name) setSenderName(updated.sender_name)
-                if (!touched.current.senderBank && updated.sender_bank) setSenderBank(updated.sender_bank)
-                if (!touched.current.receiverBank && updated.receiver_bank) setReceiverBank(updated.receiver_bank)
+                setReceipt(updated)
+
+                if (!touched.current.receiverName && updated.receiver_name) {
+                    setReceiverName(updated.receiver_name)
+                }
+                if (!touched.current.amount && updated.amount != null) {
+                    setAmount(String(updated.amount))
+                }
+                if (!touched.current.date && updated.receipt_date) {
+                    setDate(toDateInputValue(updated.receipt_date))
+                }
+                if (!touched.current.senderName && updated.sender_name) {
+                    setSenderName(updated.sender_name)
+                }
+                if (!touched.current.senderBank && updated.sender_bank) {
+                    setSenderBank(updated.sender_bank)
+                }
+                if (!touched.current.receiverBank && updated.receiver_bank) {
+                    setReceiverBank(updated.receiver_bank)
+                }
                 if (!touched.current.transactionReference && updated.transaction_reference) {
                     setTransactionReference(updated.transaction_reference)
                 }
-                if (!touched.current.notes && updated.notes) setNotes(updated.notes)
-                setDuplicateStatus(updated.duplicate_status)
+                if (!touched.current.notes && updated.notes) {
+                    setNotes(updated.notes)
+                }
 
                 const stillMissing = updated.amount == null || updated.receipt_date == null
 
@@ -193,20 +192,27 @@ export default function ScanBulkReview() {
                     setPolling(false)
                     return
                 }
+
                 if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
                     setPolling(false)
                     setPollTimedOut(true)
                     return
                 }
-                if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+
+                if (!cancelled) {
+                    timer = setTimeout(tick, POLL_INTERVAL_MS)
+                }
             } catch {
+                // Network blip — keep trying until timeout rather than
+                // giving up on the first failed poll.
                 if (!cancelled && Date.now() - startedAt < POLL_TIMEOUT_MS) {
                     timer = setTimeout(tick, POLL_INTERVAL_MS)
                 }
             }
         }
 
-        timer = setTimeout(tick, POLL_INTERVAL_MS)
+        let timer = setTimeout(tick, POLL_INTERVAL_MS)
+
         return () => {
             cancelled = true
             clearTimeout(timer)
@@ -214,30 +220,9 @@ export default function ScanBulkReview() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [polling, receipt.receipt_id])
 
-    const setOutcome = (index: number, outcome: ReceiptOutcome) => {
-        setOutcomes((prev) => {
-            const next = [...prev]
-            next[index] = outcome
-            return next
-        })
-    }
-
-    const goNext = () => {
-        if (currentIndex < total - 1) {
-            setCurrentIndex((i) => i + 1)
-        } else {
-            navigate('/dashboard')
-        }
-    }
-
-    const goPrevious = () => {
-        if (currentIndex > 0) setCurrentIndex((i) => i - 1)
-    }
-
-    const handleSkip = () => {
-        setOutcome(currentIndex, 'skipped')
-        goNext()
-    }
+    const stillProcessing = polling
+    const showTimeoutNotice = pollTimedOut && (amount === '' || !date)
+    const isPossibleDuplicate = receipt.duplicate_status === 'flagged'
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
@@ -277,12 +262,12 @@ export default function ScanBulkReview() {
             })
 
             const result = await res.json()
+
             if (!res.ok || !result.success) {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            setOutcome(currentIndex, 'saved')
-            goNext()
+            navigate('/scan')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {
@@ -290,35 +275,30 @@ export default function ScanBulkReview() {
         }
     }
 
-    const stillProcessing = polling
-    const showTimeoutNotice = pollTimedOut && (amount === '' || !date)
-    const isPossibleDuplicate = duplicateStatus === 'flagged'
-    const isLast = currentIndex === total - 1
-
     return (
         <Layout>
             <div className="max-w-4xl mx-auto">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Review batch</h1>
-                    <p className="text-sm text-gray-400 mt-1.5">Confirm each receipt's details, or make changes below.</p>
+                <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Review your receipt</h1>
+                    <p className="text-sm text-gray-400 mt-1.5">Confirm the details we found, or make changes below.</p>
                 </div>
 
-                {/* Progress: counter + bar + running tally */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-gray-900">
-                            Receipt {currentIndex + 1} of {total}
+                {/* Step indicator */}
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 text-xs font-semibold flex items-center justify-center ring-1 ring-blue-100">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
                         </span>
-                        <span className="text-xs text-gray-400">
-                            {savedCount} saved
-                            {skippedCount > 0 && ` · ${skippedCount} skipped`}
-                        </span>
+                        <span className="text-sm font-medium text-gray-400">Upload</span>
                     </div>
-                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-blue-600 rounded-full transition-all"
-                            style={{ width: `${((currentIndex + (outcomes[currentIndex] !== 'pending' ? 1 : 0)) / total) * 100}%` }}
-                        />
+                    <div className="w-10 h-px bg-gray-200" />
+                    <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center shadow-sm shadow-blue-200">
+                            2
+                        </span>
+                        <span className="text-sm font-semibold text-gray-900">Review</span>
                     </div>
                 </div>
 
@@ -340,7 +320,9 @@ export default function ScanBulkReview() {
                                     <svg className="w-10 h-10 text-gray-300 mx-auto mb-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 10.5h.008v.008H18V10.5zm-12-6h12a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 016 4.5z" />
                                     </svg>
-                                    <p className="text-xs text-gray-400">{imageError ? "Couldn't load image" : 'No image'}</p>
+                                    <p className="text-xs text-gray-400">
+                                        {imageError ? "Couldn't load image" : 'No image · go back to upload one'}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -353,7 +335,7 @@ export default function ScanBulkReview() {
                                 <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                                 </svg>
-                                <span>This looks similar to a receipt already in this business. Double check it isn't a duplicate before saving.</span>
+                                <span>This looks similar to a receipt you've already added to this business. Double check it isn't a duplicate before saving.</span>
                             </div>
                         )}
 
@@ -362,7 +344,7 @@ export default function ScanBulkReview() {
                                 <svg className="w-4 h-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                                 </svg>
-                                <span>Reading this receipt — this updates automatically, usually within a few seconds.</span>
+                                <span>Reading your receipt — this updates automatically, usually within a few seconds.</span>
                             </div>
                         ) : showTimeoutNotice ? (
                             <div className="flex items-center gap-2.5 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-3">
@@ -510,25 +492,17 @@ export default function ScanBulkReview() {
                         <div className="flex items-center gap-3 pt-3 sticky bottom-0 bg-white/80 backdrop-blur-sm -mx-1 px-1 pb-1">
                             <button
                                 type="button"
-                                onClick={goPrevious}
-                                disabled={currentIndex === 0}
-                                className="border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent active:scale-[0.99] transition-all text-gray-700 text-sm font-semibold rounded-lg py-2.5 px-4"
+                                onClick={() => navigate('/scan')}
+                                className="flex-1 border border-gray-200 hover:bg-gray-50 active:scale-[0.99] transition-all text-gray-700 text-sm font-semibold rounded-lg py-2.5"
                             >
                                 Back
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSkip}
-                                className="border border-gray-200 hover:bg-gray-50 active:scale-[0.99] transition-all text-gray-500 text-sm font-semibold rounded-lg py-2.5 px-4"
-                            >
-                                {isLast ? 'Skip & finish' : 'Skip'}
                             </button>
                             <button
                                 type="submit"
                                 disabled={saving}
                                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 active:scale-[0.99] transition-all text-white text-sm font-semibold rounded-lg py-2.5 shadow-sm shadow-blue-200 disabled:shadow-none"
                             >
-                                {saving ? 'Saving...' : isLast ? 'Save & finish' : 'Save & next'}
+                                {saving ? 'Saving...' : 'Save receipt'}
                             </button>
                         </div>
                     </form>
