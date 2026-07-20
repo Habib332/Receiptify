@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type DragEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../components/Layout'
+import UploadModeToggle from './UploadModeToggle'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -198,21 +199,18 @@ export default function ScanUpload() {
 
     return (
         <Layout>
-            <div className="mb-6 flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Scan a receipt</h1>
-                    <p className="text-sm text-gray-400 mt-1">Upload a photo or take a picture to get started.</p>
-                </div>
-                <button
-                    onClick={() => navigate('/scan/bulk')}
-                    className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-700"
-                >
-                    Bulk upload instead
-                </button>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Scan a receipt</h1>
+                <p className="text-sm text-gray-400 mt-1">Upload a photo or take a picture to get started.</p>
+            </div>
+
+            {/* Upload mode toggle */}
+            <div className="max-w-2xl flex items-center justify-center mb-6">
+                <UploadModeToggle mode="single" />
             </div>
 
             {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-6">
+            <div className="max-w-2xl flex items-center justify-center gap-2 mb-4">
                 <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center">
                         1

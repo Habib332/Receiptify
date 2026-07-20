@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type DragEvent, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../components/Layout'
+import UploadModeToggle from './UploadModeToggle'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 const MAX_FILES = 50 // matches upload.array("screenshots", 50) on the backend
@@ -226,19 +227,33 @@ export default function ScanBulkUpload() {
 
     return (
         <Layout>
-            <div className="mb-6 flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Bulk upload receipts</h1>
-                    <p className="text-sm text-gray-400 mt-1">
-                        Upload multiple receipt images at once — we'll read each one automatically.
-                    </p>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Bulk upload receipts</h1>
+                <p className="text-sm text-gray-400 mt-1">
+                    Upload multiple receipt images at once — we'll read each one automatically.
+                </p>
+            </div>
+
+            {/* Upload mode toggle */}
+            <div className="max-w-2xl flex items-center justify-center mb-6">
+                <UploadModeToggle mode="bulk" />
+            </div>
+
+            {/* Step indicator */}
+            <div className="max-w-2xl flex items-center justify-center gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-semibold flex items-center justify-center">
+                        1
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">Upload</span>
                 </div>
-                <button
-                    onClick={() => navigate('/scan')}
-                    className="shrink-0 text-xs font-semibold text-blue-600 hover:text-blue-700"
-                >
-                    Single upload instead
-                </button>
+                <div className="w-8 h-px bg-gray-200" />
+                <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-400 text-xs font-semibold flex items-center justify-center">
+                        2
+                    </span>
+                    <span className="text-sm font-medium text-gray-400">Review</span>
+                </div>
             </div>
 
             {/* Business selector */}
