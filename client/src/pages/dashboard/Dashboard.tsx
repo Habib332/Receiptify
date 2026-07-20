@@ -37,8 +37,18 @@ type Stats = {
     flaggedDuplicates: number
 }
 
+// The token that actually scopes /receipts, /receipts/stats, etc. is the
+// SESSION token (businessId + role baked in server-side by
+// auth.service.js#selectBusiness), not the identity token issued at
+// login. Switching businesses means getting a brand new session token —
+// there is no query param the backend honors for this; req.user.businessId
+// always comes from whichever session token is currently stored.
 function getToken() {
     return sessionStorage.getItem('token')
+}
+
+function setToken(token: string) {
+    sessionStorage.setItem('token', token)
 }
 
 function jsonHeaders() {
@@ -97,11 +107,24 @@ export default function Dashboard() {
     const [statsLoading, setStatsLoading] = useState(false)
     const [error, setError] = useState('')
 
-    // Business selector — "all" shows receipts across every business the
-    // user belongs to; a specific id scopes everything to that business.
+    // Business selector. auth.repository.js#getUserBusinesses returns
+    // business_id (a Postgres integer PK) — normalized to `id` (string,
+    // for consistent comparisons against dropdown state) alongside `role`
+    // (not userRole — that naming was assumed wrong before; the actual
+    // API field from both /auth/login's businesses[] and
+    // /business's list is `role`).
+    //
+    // "all" has no backing sessionToken — the backend has no concept of a
+    // cross-business session — so it's handled entirely client-side by
+    // looping select-business + fetch across every business the user
+    // belongs to and merging the results. See fetchAllBusinessesData.
     const [businesses, setBusinesses] = useState<BusinessOption[]>([])
     const [businessesLoading, setBusinessesLoading] = useState(false)
     const [selectedBusinessId, setSelectedBusinessId] = useState<string | 'all'>('all')
+    // True while a select-business call (single business) or the
+    // fetch-every-business loop (all businesses) is in flight. The
+    // dropdown disables itself during this window.
+    const [switchingBusiness, setSwitchingBusiness] = useState(false)
 
     // Filters — kept to fields the API actually supports
     // (receipts.repository.js#searchReceiptsByBusiness). Start/end date now
@@ -124,6 +147,10 @@ export default function Dashboard() {
     const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
     const [editLoading, setEditLoading] = useState(false)
 
+    // GET /business already returns each business the user belongs to
+    // with its role attached (see BusinessesPage.tsx's normalization),
+    // so this list doubles as both "what shows in the dropdown" and
+    // "what select-business is allowed to target".
     const fetchBusinesses = useCallback(async () => {
         setBusinessesLoading(true)
         try {
@@ -136,14 +163,12 @@ export default function Dashboard() {
             setBusinesses(
                 (data.data || [])
                     .map((b: any) => ({
-                        id: b.id ?? b.business_id,
+                        id: String(b.id ?? b.business_id),
                         name: b.name,
                         type: b.type,
                         logoUrl: b.logoUrl ?? b.logo_url ?? null,
-                        userRole: b.userRole ?? b.user_role ?? null,
+                        userRole: b.userRole ?? b.user_role ?? b.role ?? null,
                     }))
-                    // Only businesses the user actually belongs to are
-                    // relevant for a receipts filter.
                     .filter((b: BusinessOption) => !!b.userRole)
             )
         } catch (err) {
@@ -153,12 +178,29 @@ export default function Dashboard() {
         }
     }, [])
 
+    // Exchanges the current session token for one scoped to `businessId`
+    // via POST /auth/select-business, and stores the result. Every
+    // subsequent /receipts* call automatically picks up the new scope
+    // because jsonHeaders() reads whatever token is currently stored —
+    // no query params involved.
+    const selectBusinessSession = useCallback(async (businessId: string) => {
+        const res = await fetch(`${API_BASE_URL}/auth/select-business`, {
+            method: 'POST',
+            headers: jsonHeaders(),
+            body: JSON.stringify({ businessId: Number(businessId) }),
+        })
+        const data = await res.json()
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || 'Failed to switch business')
+        }
+        setToken(data.data.sessionToken)
+        return data.data.role as BusinessRole
+    }, [])
+
     const fetchStats = useCallback(async () => {
         setStatsLoading(true)
         try {
-            const params = new URLSearchParams()
-            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
-            const res = await fetch(`${API_BASE_URL}/receipts/stats?${params.toString()}`, {
+            const res = await fetch(`${API_BASE_URL}/receipts/stats`, {
                 method: 'GET',
                 headers: jsonHeaders(),
             })
@@ -170,15 +212,12 @@ export default function Dashboard() {
         } finally {
             setStatsLoading(false)
         }
-    }, [selectedBusinessId])
+    }, [])
 
-    // Unfiltered fetch (aside from business scope) — powers the "This
-    // Month" chart only.
+    // Unfiltered fetch — powers the "This Month" chart only.
     const fetchAllReceipts = useCallback(async () => {
         try {
-            const params = new URLSearchParams()
-            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
-            const res = await fetch(`${API_BASE_URL}/receipts?${params.toString()}`, {
+            const res = await fetch(`${API_BASE_URL}/receipts`, {
                 method: 'GET',
                 headers: jsonHeaders(),
             })
@@ -188,14 +227,13 @@ export default function Dashboard() {
         } catch (err) {
             console.error(err)
         }
-    }, [selectedBusinessId])
+    }, [])
 
     const fetchReceipts = useCallback(async () => {
         setLoading(true)
         setError('')
         try {
             const params = new URLSearchParams()
-            if (selectedBusinessId !== 'all') params.set('businessId', selectedBusinessId)
             if (referenceSearch.trim()) params.set('reference', referenceSearch.trim())
             if (dateFrom) params.set('dateFrom', dateFrom)
             if (dateTo) params.set('dateTo', dateTo)
@@ -215,36 +253,152 @@ export default function Dashboard() {
         } finally {
             setLoading(false)
         }
-    }, [selectedBusinessId, referenceSearch, dateFrom, dateTo, minAmount, maxAmount])
+    }, [referenceSearch, dateFrom, dateTo, minAmount, maxAmount])
+
+    // "All Businesses": there's no backend session that spans more than
+    // one business, so this loops select-business -> fetch -> repeat for
+    // every business the user belongs to and merges the results
+    // client-side. Ends by restoring the session to whichever business
+    // was selected before "All" was chosen isn't attempted here — the
+    // token is simply left pointed at the last business in the loop,
+    // which is fine since every other fetch in this view is also scoped
+    // through the same selector.
+    const fetchAllBusinessesData = useCallback(async () => {
+        setLoading(true)
+        setStatsLoading(true)
+        setError('')
+        try {
+            const combinedReceipts: Receipt[] = []
+            let combinedStats: Stats = { receiptCount: 0, totalSpent: 0, pendingVerification: 0, flaggedDuplicates: 0 }
+
+            for (const biz of businesses) {
+                await selectBusinessSession(biz.id)
+
+                const [receiptsRes, statsRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/receipts`, { method: 'GET', headers: jsonHeaders() }),
+                    fetch(`${API_BASE_URL}/receipts/stats`, { method: 'GET', headers: jsonHeaders() }),
+                ])
+                const receiptsData = await receiptsRes.json()
+                const statsData = await statsRes.json()
+
+                if (receiptsRes.ok && receiptsData.success) {
+                    combinedReceipts.push(...(receiptsData.data || []))
+                }
+                if (statsRes.ok && statsData.success) {
+                    combinedStats = {
+                        receiptCount: combinedStats.receiptCount + (statsData.data?.receiptCount || 0),
+                        totalSpent: combinedStats.totalSpent + (statsData.data?.totalSpent || 0),
+                        pendingVerification: combinedStats.pendingVerification + (statsData.data?.pendingVerification || 0),
+                        flaggedDuplicates: combinedStats.flaggedDuplicates + (statsData.data?.flaggedDuplicates || 0),
+                    }
+                }
+            }
+
+            combinedReceipts.sort((a, b) => {
+                const da = a.receipt_date ? new Date(a.receipt_date).getTime() : 0
+                const db = b.receipt_date ? new Date(b.receipt_date).getTime() : 0
+                return db - da
+            })
+
+            setReceipts(combinedReceipts)
+            setAllReceipts(combinedReceipts)
+            setStats(combinedStats)
+            setPage(1)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong switching businesses')
+        } finally {
+            setLoading(false)
+            setStatsLoading(false)
+        }
+    }, [businesses, selectBusinessSession])
+
+    // Central place that reloads whatever the dropdown is currently set
+    // to. Called after mutations (delete/edit/etc.) instead of the raw
+    // fetch* functions individually, so those call sites don't need to
+    // know whether "all" mode is active.
+    const refreshForCurrentSelection = useCallback(async () => {
+        if (selectedBusinessId === 'all') {
+            await fetchAllBusinessesData()
+        } else {
+            await Promise.all([fetchStats(), fetchAllReceipts(), fetchReceipts()])
+        }
+    }, [selectedBusinessId, fetchAllBusinessesData, fetchStats, fetchAllReceipts, fetchReceipts])
 
     useEffect(() => {
         fetchBusinesses()
     }, [fetchBusinesses])
 
+    // Runs whenever the dropdown selection changes (including the initial
+    // mount, once businesses have loaded). Single business -> one
+    // select-business call, then load its data. "all" -> the loop above.
     useEffect(() => {
-        fetchStats()
-        fetchAllReceipts()
-    }, [fetchStats, fetchAllReceipts])
+        if (businessesLoading) return
+        if (businesses.length === 0) return
 
+        let cancelled = false
+
+        async function run() {
+            setSwitchingBusiness(true)
+            setError('')
+            try {
+                if (selectedBusinessId === 'all') {
+                    await fetchAllBusinessesData()
+                } else {
+                    await selectBusinessSession(selectedBusinessId)
+                    if (cancelled) return
+                    await Promise.all([fetchStats(), fetchAllReceipts(), fetchReceipts()])
+                }
+            } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to switch business')
+            } finally {
+                if (!cancelled) setSwitchingBusiness(false)
+            }
+        }
+
+        run()
+        return () => {
+            cancelled = true
+        }
+        // Intentionally excludes fetchReceipts/fetchStats/fetchAllReceipts
+        // from deps beyond what's listed — those are re-triggered by the
+        // debounced search effect below once a business is selected, and
+        // re-running this whole effect on every filter keystroke would
+        // mean re-selecting the business on the backend unnecessarily.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedBusinessId, businesses, businessesLoading])
+
+    // Debounced re-fetch when search/filter fields change, but only once
+    // a business session is actually established (not mid-switch) and
+    // not in "all" mode, where filters aren't applied per-business here.
     useEffect(() => {
-        const t = setTimeout(fetchReceipts, 300) // light debounce for the search box
+        if (switchingBusiness) return
+        if (selectedBusinessId === 'all') return
+        const t = setTimeout(fetchReceipts, 300)
         return () => clearTimeout(t)
-    }, [fetchReceipts])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [referenceSearch, dateFrom, dateTo, minAmount, maxAmount, selectedBusinessId, switchingBusiness])
 
-    const refreshAggregates = useCallback(() => {
-        fetchStats()
-        fetchAllReceipts()
-    }, [fetchStats, fetchAllReceipts])
-
-    // Role for whichever business a given receipt belongs to. When viewing
-    // "All Businesses", each row can belong to a different business, so
-    // this is resolved per-row rather than from a single selected role.
+    // Role for whichever business a given receipt belongs to — resolved
+    // per-row since "All Businesses" mixes rows from multiple businesses.
     const roleForBusiness = useCallback(
         (businessId: string): BusinessRole | null => {
-            const biz = businesses.find((b) => b.id === businessId)
+            const biz = businesses.find((b) => b.id === String(businessId))
             return (biz?.userRole as BusinessRole | undefined) ?? null
         },
         [businesses]
+    )
+
+    // Mutating a receipt (delete/edit/etc.) needs the session actually
+    // pointed at that receipt's own business first — relevant only in
+    // "all" mode, where the session may currently be scoped to whichever
+    // business fetchAllBusinessesData last looped through, not
+    // necessarily the row being acted on.
+    const ensureSessionForReceipt = useCallback(
+        async (businessId: string) => {
+            if (selectedBusinessId !== 'all') return
+            await selectBusinessSession(String(businessId))
+        },
+        [selectedBusinessId, selectBusinessSession]
     )
 
     const handleDelete = async (id: string) => {
@@ -254,13 +408,16 @@ export default function Dashboard() {
         const prev = receipts
         setReceipts((p) => p.filter((r) => r.receipt_id !== id))
         try {
+            const target = prev.find((r) => r.receipt_id === id)
+            if (target) await ensureSessionForReceipt(target.business_id)
+
             const res = await fetch(`${API_BASE_URL}/receipts/${id}`, {
                 method: 'DELETE',
                 headers: jsonHeaders(),
             })
             const data = await res.json()
             if (!res.ok || !data.success) throw new Error(data.message || 'Failed to delete receipt')
-            refreshAggregates()
+            refreshForCurrentSelection()
         } catch (err) {
             setReceipts(prev)
             setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -270,10 +427,11 @@ export default function Dashboard() {
         }
     }
 
-    const handleView = async (id: string) => {
+    const handleView = async (row: Receipt) => {
         setOpenMenuId(null)
         try {
-            const res = await fetch(`${API_BASE_URL}/receipts/${id}/image-url`, {
+            await ensureSessionForReceipt(row.business_id)
+            const res = await fetch(`${API_BASE_URL}/receipts/${row.receipt_id}/image-url`, {
                 method: 'GET',
                 headers: jsonHeaders(),
             })
@@ -285,37 +443,39 @@ export default function Dashboard() {
         }
     }
 
-    const handleResolveDuplicate = async (id: string, isDuplicate: boolean) => {
+    const handleResolveDuplicate = async (row: Receipt, isDuplicate: boolean) => {
         setOpenMenuId(null)
         setError('')
         try {
-            const res = await fetch(`${API_BASE_URL}/receipts/${id}/resolve-duplicate`, {
+            await ensureSessionForReceipt(row.business_id)
+            const res = await fetch(`${API_BASE_URL}/receipts/${row.receipt_id}/resolve-duplicate`, {
                 method: 'PATCH',
                 headers: jsonHeaders(),
                 body: JSON.stringify({ isDuplicate }),
             })
             const data = await res.json()
             if (!res.ok || !data.success) throw new Error(data.message || 'Failed to resolve duplicate')
-            setReceipts((p) => p.map((r) => (r.receipt_id === id ? data.data : r)))
-            refreshAggregates()
+            setReceipts((p) => p.map((r) => (r.receipt_id === row.receipt_id ? data.data : r)))
+            refreshForCurrentSelection()
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         }
     }
 
-    const handleSaveEdit = async (id: string, fields: EditableReceiptFields) => {
+    const handleSaveEdit = async (row: Receipt, fields: EditableReceiptFields) => {
         setError('')
         setEditLoading(true)
         try {
-            const res = await fetch(`${API_BASE_URL}/receipts/${id}`, {
+            await ensureSessionForReceipt(row.business_id)
+            const res = await fetch(`${API_BASE_URL}/receipts/${row.receipt_id}`, {
                 method: 'PATCH',
                 headers: jsonHeaders(),
                 body: JSON.stringify(fields),
             })
             const data = await res.json()
             if (!res.ok || !data.success) throw new Error(data.message || 'Failed to update receipt')
-            setReceipts((p) => p.map((r) => (r.receipt_id === id ? data.data : r)))
-            refreshAggregates()
+            setReceipts((p) => p.map((r) => (r.receipt_id === row.receipt_id ? data.data : r)))
+            refreshForCurrentSelection()
             setEditingReceipt(null)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -476,6 +636,7 @@ export default function Dashboard() {
                     selectedId={selectedBusinessId}
                     onChange={setSelectedBusinessId}
                     loading={businessesLoading}
+                    switching={switchingBusiness}
                 />
 
                 <div className="relative flex-1 min-w-[220px]">
@@ -485,14 +646,16 @@ export default function Dashboard() {
                     <input
                         value={referenceSearch}
                         onChange={(e) => setReferenceSearch(e.target.value)}
-                        placeholder="Search by reference number..."
-                        className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                        disabled={selectedBusinessId === 'all'}
+                        placeholder={selectedBusinessId === 'all' ? 'Select a business to search...' : 'Search by reference number...'}
+                        className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-gray-50 disabled:text-gray-400"
                     />
                 </div>
 
                 <button
                     onClick={() => setShowFilterPanel((v) => !v)}
-                    className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+                    disabled={selectedBusinessId === 'all'}
+                    className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
@@ -501,7 +664,13 @@ export default function Dashboard() {
                 </button>
             </div>
 
-            {showFilterPanel && (
+            {selectedBusinessId === 'all' && (
+                <p className="text-xs text-gray-400 mb-4 -mt-2">
+                    Showing receipts across all your businesses. Select a single business to search or filter.
+                </p>
+            )}
+
+            {showFilterPanel && selectedBusinessId !== 'all' && (
                 <div className="border border-gray-100 rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <label className="text-xs text-gray-500">
                         Start date
@@ -576,15 +745,15 @@ export default function Dashboard() {
                         </tr>
                     </thead>
                     <tbody>
-                        {loading && receipts.length === 0 && (
+                        {(loading || switchingBusiness) && receipts.length === 0 && (
                             <tr>
                                 <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
-                                    Loading receipts...
+                                    {switchingBusiness ? 'Switching business...' : 'Loading receipts...'}
                                 </td>
                             </tr>
                         )}
 
-                        {!loading && receipts.length === 0 && (
+                        {!loading && !switchingBusiness && receipts.length === 0 && (
                             <tr>
                                 <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400">
                                     No receipts found.
@@ -618,7 +787,7 @@ export default function Dashboard() {
                                     </td>
                                     <td className="px-5 py-3.5">
                                         <button
-                                            onClick={() => handleView(row.receipt_id)}
+                                            onClick={() => handleView(row)}
                                             disabled={!row.image_url}
                                             title={row.image_url ? 'View screenshot' : 'No screenshot attached'}
                                             className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
@@ -658,7 +827,7 @@ export default function Dashboard() {
 
                                                 {row.duplicate_status === 'flagged' && (
                                                     <button
-                                                        onClick={() => handleResolveDuplicate(row.receipt_id, false)}
+                                                        onClick={() => handleResolveDuplicate(row, false)}
                                                         className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
                                                     >
                                                         Unflag as duplicate
@@ -745,7 +914,7 @@ export default function Dashboard() {
                 <EditReceiptModal
                     initial={editInitial}
                     loading={editLoading}
-                    onSave={(fields) => handleSaveEdit(editingReceipt.receipt_id, fields)}
+                    onSave={(fields) => handleSaveEdit(editingReceipt, fields)}
                     onClose={() => {
                         if (!editLoading) setEditingReceipt(null)
                     }}
