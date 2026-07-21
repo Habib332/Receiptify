@@ -1,6 +1,6 @@
 const receiptsService = require("./receipts.service");
 const ApiError = require("../../utils/apiError");
-
+const receiptsExportService = require("./receipts.export.service");
 // POST /api/receipts
 async function createReceipt(req, res, next) {
   try {
@@ -214,6 +214,33 @@ async function createBulkReceipts(req, res, next) {
   }
 }
 
+// GET /api/receipts/export?format=csv|excel|pdf&<same filters as GET /api/receipts>
+async function exportReceipts(req, res, next) {
+  try {
+    const { businessId } = req.user;
+    const { format, ...filters } = req.query;
+
+    const exporters = {
+      csv: receiptsExportService.exportReceiptsAsCsv,
+      excel: receiptsExportService.exportReceiptsAsExcel,
+      pdf: receiptsExportService.exportReceiptsAsPdf,
+    };
+
+    const exportFn = exporters[format];
+    if (!exportFn) {
+      throw new ApiError(400, "Invalid format — must be one of: csv, excel, pdf");
+    }
+
+    const { buffer, filename, contentType } = await exportFn({ businessId, filters });
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.status(200).send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createReceipt,
   listReceipts,
@@ -225,4 +252,5 @@ module.exports = {
   resolveDuplicateFlag,
   createBulkReceipts,
   getBusinessStats,
+  exportReceipts,
 };

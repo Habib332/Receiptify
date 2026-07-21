@@ -404,6 +404,90 @@ async function deleteStaleDrafts(olderThanHours = 24) {
   );
   return result.rows;
 }
+// ---- Export header info ----
+// Pulls the business's display name plus the owner's name/email, for
+// printing at the top of an export (PDF header block, Excel title rows,
+// CSV comment lines). There's no owner_id/owner_user_id column on
+// businesses itself — "owner" only exists as a role row in
+// business_users — so this has to join through that table and filter
+// role = 'owner'. LEFT JOIN (not INNER) so the business's own name/type
+// still comes back even in the edge case where no owner row exists yet
+// (e.g. ownership transferred and the join is mid-flight) — the export
+// just prints "Unknown" for the owner fields in that case rather than
+// silently returning nothing for the whole business.
+async function getBusinessWithOwner(businessId) {
+  const result = await pool.query(
+    `SELECT
+       b.business_id, b.name AS business_name, b.type AS business_type,
+       b.address AS business_address, b.phone AS business_phone,
+       u.name AS owner_name, u.email AS owner_email
+     FROM businesses b
+     LEFT JOIN business_users bu
+       ON bu.business_id = b.business_id AND bu.role = 'owner'
+     LEFT JOIN users u ON u.user_id = bu.user_id
+     WHERE b.business_id = $1
+     LIMIT 1`,
+    [businessId],
+  );
+  return result.rows[0];
+}
+
+async function getReceiptsForExport(businessId, filters = {}) {
+  const {
+    customer,
+    bank,
+    reference,
+    employee,
+    verificationStatus,
+    duplicateStatus,
+    minAmount,
+    maxAmount,
+    dateFrom,
+    dateTo,
+    uploadDateFrom,
+    uploadDateTo,
+  } = filters;
+
+  const conditions = ["r.business_id = $1", "r.upload_status = 'confirmed'"];
+  const values = [businessId];
+
+  function addCondition(sqlWithPlaceholder, value) {
+    values.push(value);
+    conditions.push(sqlWithPlaceholder.replace("?", `$${values.length}`));
+  }
+
+  if (customer) addCondition("r.sender_name ILIKE ?", `%${customer}%`);
+  if (bank) addCondition("r.sender_bank ILIKE ?", `%${bank}%`);
+  if (reference)
+    addCondition("r.transaction_reference ILIKE ?", `%${reference}%`);
+  if (employee) addCondition("u.name ILIKE ?", `%${employee}%`);
+  if (verificationStatus)
+    addCondition("r.verification_status = ?", verificationStatus);
+  if (duplicateStatus) addCondition("r.duplicate_status = ?", duplicateStatus);
+  if (minAmount !== undefined && minAmount !== null)
+    addCondition("r.amount >= ?", minAmount);
+  if (maxAmount !== undefined && maxAmount !== null)
+    addCondition("r.amount <= ?", maxAmount);
+  if (dateFrom) addCondition("r.receipt_date >= ?", dateFrom);
+  if (dateTo) addCondition("r.receipt_date <= ?", dateTo);
+  if (uploadDateFrom) addCondition("r.created_at >= ?", uploadDateFrom);
+  if (uploadDateTo) addCondition("r.created_at <= ?", uploadDateTo);
+
+  const result = await pool.query(
+    `SELECT
+       r.receipt_id, r.business_id, r.uploaded_by, u.name AS employee_name,
+       r.amount, r.currency, r.receipt_date, r.notes, r.image_url,
+       r.sender_name, r.sender_bank, r.receiver_name, r.receiver_bank,
+       r.transaction_reference, r.screenshot_hash, r.verification_status,
+       r.duplicate_status, r.upload_status, r.created_at
+     FROM receipts r
+     LEFT JOIN users u ON u.user_id = r.uploaded_by
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY r.receipt_date DESC NULLS LAST, r.created_at DESC`,
+    values,
+  );
+  return result.rows;
+}
 
 module.exports = {
   createReceipt,
@@ -425,4 +509,6 @@ module.exports = {
   findBatchById,
   findStaleDrafts,
   deleteStaleDrafts,
+  getReceiptsForExport,
+  getBusinessWithOwner,
 };

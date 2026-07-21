@@ -548,6 +548,11 @@ async function cleanupStaleDrafts(olderThanHours = 24) {
   return { deletedCount: deleted.length };
 }
 
+async function getReceiptsForExport({ businessId, query }) {
+  const receipts = await searchReceipts({ businessId, query });
+  return receiptsRepository.getReceiptsForExport(receipts);
+} 
+
 module.exports = {
   createReceipt,
   runOcrForReceipt,
@@ -564,4 +569,5 @@ module.exports = {
   computeScreenshotHash,
   createBulkReceipts,
   cleanupStaleDrafts,
+  getReceiptsForExport,
 };

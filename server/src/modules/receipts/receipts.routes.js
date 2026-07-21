@@ -28,6 +28,17 @@ const upload = multer({
 // Read: any role (owner, manager, staff) can view
 router.get("/", authMiddleware, receiptsController.listReceipts);
 router.get("/stats", authMiddleware, receiptsController.getBusinessStats);
+
+// MUST be registered before "/:receiptId" — otherwise Express matches
+// "export" as the :receiptId param and this route is never reached.
+// (Verified with a standalone Express test — see feature notes.)
+router.get(
+  "/export",
+  authMiddleware,
+  allowRoles("owner", "manager"),
+  receiptsController.exportReceipts,
+);
+
 router.get("/:receiptId", authMiddleware, receiptsController.getReceipt);
 // Returns a fresh short-lived signed URL for this receipt's screenshot —
 // call this whenever the frontend actually needs to display the image,
@@ -52,7 +63,7 @@ router.post(
 router.patch(
   "/:receiptId",
   authMiddleware,
-  allowRoles("owner", "manager","staff"),
+  allowRoles("owner", "manager", "staff"),
   validate(updateReceipt),
   receiptsController.updateReceipt,
 );

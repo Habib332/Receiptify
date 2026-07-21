@@ -13,21 +13,24 @@
     "migrate": "node src/db/migrate.js"
   },
   "dependencies": {
+    "@google/genai": "^1.0.0",
     "@supabase/supabase-js": "^2.110.2",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "google-auth-library": "^10.9.0",
     "helmet": "^8.2.0",
     "joi": "^18.2.3",
+    "json-2-csv": "^5.5.11",
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
+    "pdfkit": "^0.19.1",
     "pg": "^8.22.0",
-    "tesseract.js": "^7.0.0",
-    "@google/genai": "^1.0.0"
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
