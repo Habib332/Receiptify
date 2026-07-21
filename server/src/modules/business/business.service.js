@@ -229,6 +229,22 @@ async function getBusinessMembers({ userId, businessId }) {
   return businessRepository.getBusinessMembers({ businessId });
 }
 
+async function removeMemberFromBusiness({ userId, businessId, memberId }) {
+  const existing = await businessRepository.findBusinessById(businessId);
+
+  if (!existing) {
+    throw new ApiError(404, "Business not found");
+  }
+
+  await assertCanModifyBusiness({
+    userId,
+    businessId,
+    allowedRoles: ["owner", "manager"],
+  });
+
+  return businessRepository.removeMemberFromBusiness({ businessId, userId: memberId });
+}
+
 module.exports = {
   createBusiness,
   updateBusiness,
@@ -237,4 +253,5 @@ module.exports = {
   listBusinesses,
   getDashboardStats,
   getBusinessMembers,
+  removeMemberFromBusiness,
 };

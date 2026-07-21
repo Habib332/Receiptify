@@ -154,6 +154,20 @@ async function getBusinessMembers(req, res, next) {
   }
 }
 
+async function removeMemberFromBusiness(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { businessId, memberId } = req.params;  
+
+    const result = await businessService.removeMemberFromBusiness({ userId, businessId, memberId });
+
+    res.status(200).json({ success: true, data: result });
+  }
+  catch (err) {
+    next(err);
+  }   
+}
+
 module.exports = {
   createBusiness,
   listBusinesses,
@@ -164,6 +178,7 @@ module.exports = {
   listBusinesses,
   joinBusiness,
   getBusinessMembers,
+  removeMemberFromBusiness,
 };
 
 

@@ -218,6 +218,16 @@ async function getBusinessMembers({ businessId }) {
   return result.rows;
 }
 
+async function removeMemberFromBusiness({ businessId, userId }) {
+  const result = await pool.query(
+    `DELETE FROM business_users
+     WHERE business_id = $1 AND user_id = $2
+      RETURNING business_id, user_id, role`,
+    [businessId, userId],
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   createBusiness,
   linkUserToBusiness,
@@ -234,4 +244,5 @@ module.exports = {
   joinBusinessAsStaff,
   findOwnersAndManagers,
   getBusinessMembers,
+  removeMemberFromBusiness,
 };
