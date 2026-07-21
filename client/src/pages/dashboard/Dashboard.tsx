@@ -616,28 +616,7 @@ export default function Dashboard() {
         }
     }
 
-    const handleExportAll = () => {
-        const rows = [
-            ['Date', 'Receiver', 'Sender', 'Reference', 'Amount', 'Currency', 'Duplicate Status'],
-            ...receipts.map((r) => [
-                r.receipt_date || '',
-                r.receiver_name || '',
-                r.sender_name || '',
-                r.transaction_reference || '',
-                r.amount || '',
-                r.currency,
-                r.duplicate_status,
-            ]),
-        ]
-        const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `receipts-export-${new Date().toISOString().slice(0, 10)}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-    }
+    
 
     // ---- This Month: total + weekly spend buckets, computed client-side
     // from allReceipts since the stats endpoint has no month breakdown. ----
@@ -726,15 +705,6 @@ export default function Dashboard() {
                         >
                             <span className="text-base leading-none">+</span> Upload Receipt
                         </a>
-                        <button
-                            onClick={handleExportAll}
-                            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-sm font-medium text-gray-700 rounded-lg px-4 py-2.5 transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                            </svg>
-                            Export All
-                        </button>
                     </div>
                 </div>
                 <div className="hidden md:flex shrink-0 w-80 h-56 items-center justify-center">
