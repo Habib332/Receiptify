@@ -664,14 +664,6 @@ export default function BusinessesPage() {
                                 >
                                     {hasJoined ? 'Joined' : hasPendingRequest ? 'Pending' : 'Join'}
                                 </button>
-                                <button
-                                    onClick={() => setEditingBusiness(biz)}
-                                    className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                                    </svg>
-                                </button>
                                 <div className="relative">
                                     <button
                                         onClick={(e) => {
@@ -692,6 +684,18 @@ export default function BusinessesPage() {
                                         >
                                             <button
                                                 onClick={() => {
+                                                    setEditingBusiness(biz)
+                                                    setOpenMenuId(null)
+                                                }}
+                                                className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                                                </svg>
+                                                Edit details
+                                            </button>
+                                            <button
+                                                onClick={() => {
                                                     setViewingTeamBusiness(biz)
                                                     setOpenMenuId(null)
                                                 }}
@@ -702,6 +706,7 @@ export default function BusinessesPage() {
                                                 </svg>
                                                 View team
                                             </button>
+                                            <div className="border-t border-gray-100 my-1" />
                                             <button
                                                 onClick={() => {
                                                     setDeletingBusiness(biz)
