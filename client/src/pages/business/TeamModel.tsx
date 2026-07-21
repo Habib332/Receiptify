@@ -26,6 +26,10 @@ type TeamMember = {
 type TeamModalProps = {
     businessId: string
     businessName: string
+    // The viewer's own role for this business ('owner' | 'manager' | 'staff').
+    // Drives whether the remove button shows at all, and on which rows —
+    // the backend re-checks this regardless, this is just for a clean UI.
+    currentUserRole?: string | null
     onClose: () => void
 }
 
@@ -48,10 +52,24 @@ function initials(name: string) {
         .join('')
 }
 
-export default function TeamModal({ businessId, businessName, onClose }: TeamModalProps) {
+// Mirrors the backend's rule in business.service.js removeMemberFromBusiness:
+// owner can remove managers/staff, manager can remove staff only, nobody
+// can remove an owner. Kept here just to decide whether to show the button —
+// the server is the actual source of truth.
+function canRemove(viewerRole: string | null | undefined, targetRole: string) {
+    if (targetRole === 'owner') return false
+    if (viewerRole === 'owner') return true
+    if (viewerRole === 'manager') return targetRole === 'staff'
+    return false
+}
+
+export default function TeamModal({ businessId, businessName, currentUserRole, onClose }: TeamModalProps) {
     const [members, setMembers] = useState<TeamMember[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null)
+    const [removeLoading, setRemoveLoading] = useState(false)
+    const [removeError, setRemoveError] = useState('')
 
     useEffect(() => {
         let cancelled = false
@@ -98,6 +116,31 @@ export default function TeamModal({ businessId, businessName, onClose }: TeamMod
             cancelled = true
         }
     }, [businessId])
+
+    const handleRemove = async () => {
+        if (!removeTarget) return
+        setRemoveLoading(true)
+        setRemoveError('')
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/${businessId}/members/${removeTarget.id}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to remove member')
+            }
+
+            setMembers((prev) => prev.filter((m) => m.id !== removeTarget.id))
+            setRemoveTarget(null)
+        } catch (err) {
+            setRemoveError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setRemoveLoading(false)
+        }
+    }
 
     return (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
@@ -156,6 +199,17 @@ export default function TeamModal({ businessId, businessName, onClose }: TeamMod
                                         <span className={`text-[11px] font-semibold capitalize rounded-full px-2.5 py-1 shrink-0 ${style.bg} ${style.color}`}>
                                             {member.role}
                                         </span>
+                                        {canRemove(currentUserRole, member.role) && (
+                                            <button
+                                                onClick={() => {
+                                                    setRemoveError('')
+                                                    setRemoveTarget(member)
+                                                }}
+                                                className="text-[11px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full px-2.5 py-1 shrink-0 transition-colors"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
                                     </div>
                                 )
                             })}
@@ -163,6 +217,45 @@ export default function TeamModal({ businessId, businessName, onClose }: TeamMod
                     )}
                 </div>
             </div>
+
+            {removeTarget && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+                        <div className="w-11 h-11 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-base font-bold text-gray-900 mb-1.5">
+                            Remove {removeTarget.name}?
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            They will lose access to this business and its data. This action can't be undone.
+                        </p>
+                        {removeError && (
+                            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
+                                {removeError}
+                            </div>
+                        )}
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setRemoveTarget(null)}
+                                disabled={removeLoading}
+                                className="flex-1 h-10 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleRemove}
+                                disabled={removeLoading}
+                                className="flex-1 h-10 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                            >
+                                {removeLoading ? 'Removing...' : 'Remove'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

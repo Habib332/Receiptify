@@ -769,6 +769,7 @@ export default function BusinessesPage() {
                 <TeamModal
                     businessId={viewingTeamBusiness.id}
                     businessName={viewingTeamBusiness.name}
+                    currentUserRole={viewingTeamBusiness.userRole}
                     onClose={() => setViewingTeamBusiness(null)}
                 />
             )}

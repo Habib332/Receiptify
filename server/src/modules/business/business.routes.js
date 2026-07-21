@@ -71,4 +71,9 @@ router.patch(
   joinRequestsController.rejectJoinRequest,
 );
 
+router.delete(
+  "/:businessId/members/:memberId",
+  authMiddleware,
+  businessController.removeMemberFromBusiness,
+);
 module.exports = router;
