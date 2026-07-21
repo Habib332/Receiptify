@@ -636,8 +636,7 @@ export default function BusinessesPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
                                 </svg>
                                 <div className="leading-tight">
-                                    <p className="text-sm font-semibold">{biz.receipts}</p>
-                                    <button className="text-[10px] text-blue-500" onClick={() => navigateToReceiptsPage(biz)}>
+                                    <button className="text-sm font-semibold capitalize" onClick={() => navigateToReceiptsPage(biz)}>
                                         Receipts
                                     </button>
                                 </div>
@@ -650,7 +649,6 @@ export default function BusinessesPage() {
                                     </svg>
                                     <div className="leading-tight">
                                         <p className="text-sm font-semibold capitalize">{biz.userRole}</p>
-                                        <p className="text-[10px] text-green-500">Your Role</p>
                                     </div>
                                 </div>
                             )}
