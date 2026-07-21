@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Layout from '../../components/Layout'
 import DashboardHeroImage from '../../assets/Dashboard.png'
 import DeleteReceiptModal from './DeleteReceiptModal'
 import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal'
 import BusinessSelector, { type BusinessOption } from './BusinessSelector'
 import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
+import { LineChart, Line, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { useLocation } from 'react-router-dom'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -107,6 +108,40 @@ function canManageReceipts(role: BusinessRole | null) {
 }
 
 const PAGE_SIZE = 5
+
+// Animates a number counting up from 0 to `value` whenever `value` changes
+// (including on initial mount and on every refetch/business switch), so
+// stats visibly increment rather than just popping into place.
+function useCountUp(value: number, durationMs = 800) {
+    const [display, setDisplay] = useState(0)
+    const rafRef = useRef<number | null>(null)
+
+    useEffect(() => {
+        const from = 0
+        const to = Number.isFinite(value) ? value : 0
+        const start = performance.now()
+
+        function tick(now: number) {
+            const elapsed = now - start
+            const progress = Math.min(1, elapsed / durationMs)
+            // ease-out cubic: fast start, gentle settle
+            const eased = 1 - Math.pow(1 - progress, 3)
+            setDisplay(from + (to - from) * eased)
+            if (progress < 1) {
+                rafRef.current = requestAnimationFrame(tick)
+            } else {
+                setDisplay(to)
+            }
+        }
+
+        rafRef.current = requestAnimationFrame(tick)
+        return () => {
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+        }
+    }, [value, durationMs])
+
+    return display
+}
 
 export default function Dashboard() {
     const location = useLocation()
@@ -616,33 +651,65 @@ export default function Dashboard() {
         }
     }
 
-    
 
-    // ---- This Month: total + weekly spend buckets, computed client-side
-    // from allReceipts since the stats endpoint has no month breakdown. ----
-    const thisMonth = useMemo(() => {
-        const now = new Date()
-        const year = now.getFullYear()
-        const month = now.getMonth()
-        const inMonth = allReceipts.filter((r) => {
-            if (!r.receipt_date) return false
-            const d = new Date(r.receipt_date)
-            return d.getFullYear() === year && d.getMonth() === month
-        })
-        const total = inMonth.reduce((sum, r) => sum + Number(r.amount || 0), 0)
 
-        // Bucket by week-of-month (1..5) for a compact 5-bar chart.
-        const buckets = [0, 0, 0, 0, 0]
-        inMonth.forEach((r) => {
-            const d = new Date(r.receipt_date as string)
-            const week = Math.min(4, Math.floor((d.getDate() - 1) / 7))
-            buckets[week] += Number(r.amount || 0)
-        })
-        const max = Math.max(1, ...buckets)
-        const currency = inMonth[0]?.currency || 'PKR'
+   const thisMonth = useMemo(() => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = now.getMonth()
 
-        return { total, buckets, max, currency, count: inMonth.length }
-    }, [allReceipts])
+    const inMonth = allReceipts.filter((r) => {
+        if (!r.receipt_date) return false
+
+        const d = new Date(r.receipt_date)
+
+        return (
+            d.getFullYear() === year &&
+            d.getMonth() === month
+        )
+    })
+
+    const total = inMonth.reduce(
+        (sum, r) => sum + Number(r.amount || 0),
+        0
+    )
+
+    // Weekly buckets (keep these if you still need them)
+    const buckets = [0, 0, 0, 0, 0]
+
+    // Number of days in this month
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+    // One value per day
+    const dailyTotals = Array(daysInMonth).fill(0)
+
+    inMonth.forEach((r) => {
+        const d = new Date(r.receipt_date as string)
+
+        const week = Math.min(4, Math.floor((d.getDate() - 1) / 7))
+        buckets[week] += Number(r.amount || 0)
+
+        // Add amount to its day
+        dailyTotals[d.getDate() - 1] += Number(r.amount || 0)
+    })
+
+    const max = Math.max(1, ...buckets)
+    const currency = inMonth[0]?.currency || 'PKR'
+
+    return {
+        total,
+        buckets,
+        dailyTotals,
+        max,
+        currency,
+        count: inMonth.length,
+    }
+}, [allReceipts])
+
+const dailyData = thisMonth.dailyTotals.map((value, index) => ({
+    day: index + 1,
+    total: value,
+}))
 
     const totalPages = Math.max(1, Math.ceil(receipts.length / PAGE_SIZE))
     const pageReceipts = receipts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -657,6 +724,10 @@ export default function Dashboard() {
             notes: editingReceipt.notes || '',
         }
         : null
+
+    // Animated "This Month" total (raw number driving the count-up); the
+    // formatted currency string is computed after animation each render.
+    const animatedThisMonthTotal = useCountUp(statsLoading ? 0 : thisMonth.total)
 
     return (
         <Layout>
@@ -717,26 +788,122 @@ export default function Dashboard() {
             </div>
 
             {/* Stats — Total Receipts, Total Amount, This Month */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <StatCard label="Total Receipts" value={statsLoading ? '—' : String(stats?.receiptCount ?? 0)} sub="Across your business" iconColor="blue" />
-                <StatCard label="Total Amount" value={statsLoading ? '—' : formatAmount(stats?.totalSpent ?? 0, 'PKR')} sub="Across all receipts" iconColor="green" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 items-stretch">
 
-                {/* This Month — total + weekly mini bar chart */}
-                <div className="border border-gray-100 rounded-2xl p-4 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-400">This Month</span>
-                        <span className="text-xs text-gray-300">{thisMonth.count} receipts</span>
-                    </div>
-                    <div className="text-xl font-bold text-gray-900">{formatAmount(thisMonth.total, thisMonth.currency)}</div>
-                    <div className="flex items-end gap-1 h-8 mt-1">
-                        {thisMonth.buckets.map((v, i) => (
-                            <div
-                                key={i}
-                                className="flex-1 bg-blue-400 rounded-sm"
-                                style={{ height: `${Math.max(6, (v / thisMonth.max) * 100)}%` }}
-                                title={`Week ${i + 1}: ${formatAmount(v, thisMonth.currency)}`}
+                <StatCard
+                    label="Total Receipts"
+                    value={stats?.receiptCount ?? 0}
+                    loading={statsLoading}
+                    sub="Across your business"
+                    iconColor="blue"
+                    icon={
+                        <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={1.8}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M7 3h10v18l-2-1.5-3 1.5-3-1.5-2 1.5V3z"
                             />
-                        ))}
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M10 8h4M10 12h4M10 16h2"
+                            />
+                        </svg>
+                    }
+                />
+
+                <StatCard
+                    label="Total Amount"
+                    value={stats?.totalSpent ?? 0}
+                    loading={statsLoading}
+                    sub="Across all receipts"
+                    iconColor="green"
+                    format={(n) => formatAmount(n, 'PKR')}
+                    icon={
+                        <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={1.8}
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M3.75 7.5h16.5A1.5 1.5 0 0121.75 9v6a1.5 1.5 0 01-1.5 1.5H3.75A1.5 1.5 0 012.25 15V9a1.5 1.5 0 011.5-1.5z"
+                            />
+                            <circle cx="12" cy="12" r="2.25" />
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5.5 9.75h.01M18.5 14.25h.01"
+                            />
+                        </svg>
+                    }
+                />
+                {/* This Month — total + daily mini line chart */}
+                <div className="border border-gray-200 rounded-2xl p-5 flex flex-col justify-center gap-2 h-full min-h-[128px]">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-500 flex items-center justify-center">
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M7 17L17 7M17 7H9M17 7v8"
+                                    />
+                                </svg>
+                            </div>
+
+                            <span className="text-xs text-gray-400">This Month</span>
+                        </div>
+
+                        <span className="text-xs text-gray-300">
+                            {thisMonth.count} receipts
+                        </span>
+                    </div>
+                    <div className="text-xl font-bold text-gray-900 tabular-nums">
+                        {statsLoading ? '—' : formatAmount(animatedThisMonthTotal, thisMonth.currency)}
+                    </div>
+                    <div className="h-24 mt-2">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={dailyData}>
+                                <XAxis
+                                    dataKey="day"
+                                    tick={{ fontSize: 10 }}
+                                    interval="preserveStartEnd"
+                                />
+
+                                <Tooltip
+                                    formatter={(value: number) =>
+                                        formatAmount(value, thisMonth.currency)
+                                    }
+                                />
+
+                                <Line
+                                    type="monotone"
+                                    dataKey="total"
+                                    stroke="#3B82F6"
+                                    strokeWidth={3}
+                                    dot={false}
+                                    isAnimationActive={true}
+                                    animationDuration={800}
+                                    animationEasing="ease-out"
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
@@ -1045,22 +1212,50 @@ export default function Dashboard() {
     )
 }
 
-function StatCard({ label, value, sub, iconColor }: { label: string; value: string; sub: string; iconColor: 'blue' | 'green' | 'amber' | 'purple' }) {
+function StatCard({
+    label,
+    value,
+    sub,
+    iconColor,
+    icon,
+    loading,
+    format,
+}: {
+    label: string
+    value: number
+    sub: string
+    iconColor: 'blue' | 'green' | 'amber' | 'purple'
+    icon?: React.ReactNode
+    loading?: boolean
+    format?: (n: number) => string
+}) {
     const colors: Record<string, string> = {
         blue: 'bg-blue-50 text-blue-500',
         green: 'bg-green-50 text-green-500',
         amber: 'bg-amber-50 text-amber-500',
         purple: 'bg-purple-50 text-purple-500',
     }
+
+    // Animate from 0 up to `value` every time it changes (initial load,
+    // refetch after mutation, business switch, etc.)
+    const animated = useCountUp(loading ? 0 : value)
+
+    const displayValue = loading
+        ? '—'
+        : format
+            ? format(animated)
+            : Math.round(animated).toLocaleString()
+
     return (
-        <div className="border border-gray-100 rounded-2xl p-4 flex flex-col gap-2">
+        <div className="border border-gray-200 rounded-2xl p-5 flex flex-col justify-center gap-2 h-full min-h-[128px]">
             <div className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${colors[iconColor]}`}>
-                    <span className="w-2 h-2 rounded-full bg-current" />
+                    {icon ?? <span className="w-2 h-2 rounded-full bg-current" />}
                 </div>
                 <span className="text-xs text-gray-400">{label}</span>
             </div>
-            <div className="text-xl font-bold text-gray-900">{value}</div>
+
+            <div className="text-xl font-bold text-gray-900 tabular-nums">{displayValue}</div>
             <div className="text-xs text-gray-400">{sub}</div>
         </div>
     )
