@@ -10,6 +10,7 @@ import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import TeamModal from './TeamModel'
+import { useNavigate } from 'react-router-dom'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -66,6 +67,7 @@ function isPermissionError(status: number, message: string) {
 }
 
 export default function BusinessesPage() {
+    const navigate = useNavigate()
     const [businesses, setBusinesses] = useState<Business[]>([])
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [search, setSearch] = useState('')
@@ -92,6 +94,14 @@ export default function BusinessesPage() {
     const [showNotifications, setShowNotifications] = useState(false)
     const [notifications, setNotifications] = useState<NotificationItem[]>([])
     const [notificationsLoading, setNotificationsLoading] = useState(false)
+
+    const navigateToReceiptsPage = (biz: Business) => {
+        navigate('/dashboard', {
+            state: {
+                businessId: biz.id,
+            },
+        })
+    }
 
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
@@ -627,15 +637,12 @@ export default function BusinessesPage() {
                                 </svg>
                                 <div className="leading-tight">
                                     <p className="text-sm font-semibold">{biz.receipts}</p>
-                                    <p className="text-[10px] text-blue-500">Receipts</p>
+                                    <button className="text-[10px] text-blue-500" onClick={() => navigateToReceiptsPage(biz)}>
+                                        Receipts
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Only shows when the current user actually belongs to
-                                this business (owner/manager/staff). If they're not a
-                                member, this slot is simply omitted rather than showing
-                                a placeholder — same size/position as the old
-                                "Total Spent" box when it is present. */}
                             {biz.userRole && (
                                 <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 shrink-0">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
