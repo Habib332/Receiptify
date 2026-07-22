@@ -692,7 +692,7 @@ export default function BusinessesPage() {
                     <button
                         onClick={() => setViewMode('My Businesses')}
                         aria-pressed={viewMode === 'My Businesses'}
-                        className={`flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold transition-all ${
+                        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold transition-all ${
                             viewMode === 'My Businesses'
                                 ? 'bg-blue-600 text-white shadow-sm border-gray-400'
                                 : 'text-gray-500 hover:text-gray-700'
