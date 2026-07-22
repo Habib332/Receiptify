@@ -9,6 +9,7 @@ import TypeFilterDropdown from './TypeFilterDropdown'
 import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import BusinessHeroImage from '../../assets/Business.png'
 import DeleteConfirmModal from './DeleteConfirmModal'
+import LeaveBusinessModal from './LeaveBusinessModal'
 import TeamModal from './TeamModel'
 import { useNavigate } from 'react-router-dom'
 
@@ -35,6 +36,11 @@ type DashboardStats = {
     totalReceipts: number
 }
 
+// Which slice of `businesses` is currently shown in the list.
+// 'mine' = businesses the user has a role in (default).
+// 'all'  = every business returned by the search/filter, joined or not.
+type ViewMode = 'My Businesses' | 'All Businesses'
+
 function getToken() {
     return sessionStorage.getItem('token')
 }
@@ -44,6 +50,29 @@ function authHeaders() {
     return {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+}
+
+// Reads the userId claim out of the JWT payload stored in sessionStorage.
+// Decode-only (no signature verification) — same trust model as the rest
+// of the frontend, which already relies on the backend to reject a
+// tampered/expired token on every request. Used only to build the
+// "leave business" request URL (DELETE /business/:id/members/:memberId
+// with the caller's own id) — never used to make an authorization
+// decision on the frontend itself, since the backend re-derives role
+// from business_users per-business anyway (see business.routes.js
+// comments on why the token's role can't be trusted per-business).
+function getCurrentUserId(): string | null {
+    const token = getToken()
+    if (!token) return null
+    try {
+        const payload = token.split('.')[1]
+        // base64url -> base64
+        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+        const decoded = JSON.parse(atob(base64))
+        return decoded.userId ?? decoded.id ?? decoded.sub ?? null
+    } catch {
+        return null
     }
 }
 
@@ -79,8 +108,18 @@ export default function BusinessesPage() {
     const [pendingRequestBusinessIds, setPendingRequestBusinessIds] = useState<Set<string>>(new Set())
     const [deletingBusiness, setDeletingBusiness] = useState<Business | null>(null)
     const [deleteLoading, setDeleteLoading] = useState(false)
+    // Business the user has asked to leave — separate from deletingBusiness
+    // since leave (self-removal, staff/manager only) and delete (owner-only,
+    // destroys the business) are different actions with different endpoints
+    // and different confirmation copy.
+    const [leavingBusiness, setLeavingBusiness] = useState<Business | null>(null)
+    const [leaveLoading, setLeaveLoading] = useState(false)
     const [viewingTeamBusiness, setViewingTeamBusiness] = useState<Business | null>(null)
     const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+    // Default view is "My Businesses" (only ones the user has a role in).
+    // Switching to "All Businesses" reveals ones they could still join.
+    const [viewMode, setViewMode] = useState<ViewMode>('All Businesses')
 
     const [loading, setLoading] = useState(false)
     const [statsLoading, setStatsLoading] = useState(false)
@@ -246,6 +285,18 @@ export default function BusinessesPage() {
         ? distinctTypeCount
         : stats?.businessTypeCount ?? 0
 
+    // "My Businesses" is the default list view: only businesses the user
+    // already has a role in (owner/manager/staff). "All Businesses" shows
+    // everything the current search/type filter matched, joined or not —
+    // that's the view used to discover and join new businesses. This is
+    // computed client-side off the already-fetched `businesses` array, so
+    // toggling is instant and doesn't require a new request.
+    const displayedBusinesses = useMemo(() => {
+        return viewMode === 'My Businesses'
+            ? businesses.filter((b) => !!b.userRole)
+            : businesses
+    }, [businesses, viewMode])
+
     const unreadNotificationCount = notifications.filter((n) => !n.read).length
 
     const handleAddBusiness = async (data: { name: string; type: string; address: string; phone: string }) => {
@@ -294,6 +345,59 @@ export default function BusinessesPage() {
         } finally {
             setDeleteLoading(false)
             setDeletingBusiness(null)
+        }
+    }
+
+    // Leave flow: staff/manager only (never owner — enforced both here via
+    // the menu item being hidden, and should also be enforced server-side).
+    // Hits DELETE /business/:businessId/members/:memberId with the current
+    // user's own id, reusing the existing "remove member" endpoint rather
+    // than a dedicated /leave route — self-removal is just a member removal
+    // where the actor and the target are the same person.
+    const handleLeave = async (id: string) => {
+        setError('')
+        setLeaveLoading(true)
+
+        const currentUserId = getCurrentUserId()
+        if (!currentUserId) {
+            setLeaveLoading(false)
+            setError('Could not determine your account. Please sign in again.')
+            return
+        }
+
+        // Optimistic update
+        const prevBusinesses = businesses
+        setBusinesses((prev) => prev.filter((b) => b.id !== id))
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/business/${id}/members/${currentUserId}`, {
+                method: 'DELETE',
+                headers: authHeaders(),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                const message = data.message || 'Failed to leave business'
+                setBusinesses(prevBusinesses)
+
+                if (isPermissionError(res.status, message)) {
+                    setPermissionError(
+                        "You can't leave this business right now. If you're the owner, ownership must be transferred first."
+                    )
+                    return
+                }
+
+                throw new Error(message)
+            }
+
+            await fetchStats()
+        } catch (err) {
+            setBusinesses(prevBusinesses)
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setLeaveLoading(false)
+            setLeavingBusiness(null)
         }
     }
 
@@ -577,21 +681,69 @@ export default function BusinessesPage() {
                 </button>
             </div>
 
-            <h3 className="text-sm font-bold text-gray-900 mb-3">
-                Available Businesses ({businesses.length})
-            </h3>
+            {/* My Businesses / All Businesses toggle. Compact segmented
+               control, right-aligned under the search/filter/add row, since
+               it's a view switch rather than a primary action. "My
+               Businesses" (default) shows rows with a userRole; "All
+               Businesses" shows everything the search/filter matched,
+               including businesses not yet joined. */}
+            <div className="flex justify-start mb-4">
+              <div className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-300 transition-colors text-gray-800 text-sm font-semibold rounded-lg px-4 py-2.5 whitespace-nowrap">
+                    <button
+                        onClick={() => setViewMode('My Businesses')}
+                        aria-pressed={viewMode === 'My Businesses'}
+                        className={`flex items-center rounded-md px-2.5 py-1.5 text-sm font-semibold transition-all ${
+                            viewMode === 'My Businesses'
+                                ? 'bg-blue-600 text-white shadow-sm border-gray-400'
+                                : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        My Businesses
+                        <span
+                            className={`text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 ${
+                                viewMode === 'My Businesses' ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-500'
+                            }`}
+                        >
+                            {businesses.filter((b) => !!b.userRole).length}
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={() => setViewMode('All Businesses')}
+                        aria-pressed={viewMode === 'All Businesses'}
+                        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold transition-all ${
+                            viewMode === 'All Businesses'
+                                ? 'bg-blue-600 text-white shadow-sm border-gray-400'
+                                : 'text-gray-500 hover:text-gray-700 border-gray-400'
+                        }`}
+                    >
+                        All Businesses
+                        <span
+                            className={`text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 ${
+                                viewMode === 'All Businesses' ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-500'
+                            }`}
+                        >
+                            {businesses.length}
+                        </span>
+                    </button>
+                </div>
+            </div>
 
             {/* Business list */}
             <div className="border border-gray-100 rounded-2xl divide-y divide-gray-100 mb-4">
-                {loading && businesses.length === 0 && (
+                {loading && displayedBusinesses.length === 0 && (
                     <div className="px-5 py-10 text-center text-sm text-gray-400">Loading businesses...</div>
                 )}
 
-                {!loading && businesses.length === 0 && (
-                    <div className="px-5 py-10 text-center text-sm text-gray-400">No businesses found.</div>
+                {!loading && displayedBusinesses.length === 0 && (
+                    <div className="px-5 py-10 text-center text-sm text-gray-400">
+                        {viewMode === 'My Businesses'
+                            ? "You haven't joined any businesses yet. Switch to \"All Businesses\" to find one."
+                            : 'No businesses found.'}
+                    </div>
                 )}
 
-                {businesses.map((biz) => {
+                {displayedBusinesses.map((biz) => {
                     const { bg, color, icon } = getBusinessIcon(biz.type)
                     // Only show Join when the user has no role at all for this
                     // business — owners, managers, and existing staff already
@@ -600,6 +752,12 @@ export default function BusinessesPage() {
                     const hasJoined = !!biz.userRole
                     const hasPendingRequest = pendingRequestBusinessIds.has(biz.id)
                     const joinButtonDisabled = hasJoined || hasPendingRequest
+                    // Leave is only meaningful (and only allowed) for
+                    // managers/staff — an owner leaving their own business
+                    // makes no sense without a separate ownership-transfer
+                    // flow, so the option is hidden entirely for owners
+                    // rather than shown-then-rejected by the API.
+                    const canLeave = biz.userRole === 'manager' || biz.userRole === 'staff'
                     return (
                         <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
                             <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
@@ -711,6 +869,22 @@ export default function BusinessesPage() {
                                                 </svg>
                                                 View team
                                             </button>
+
+                                            {canLeave && (
+                                                <button
+                                                    onClick={() => {
+                                                        setLeavingBusiness(biz)
+                                                        setOpenMenuId(null)
+                                                    }}
+                                                    className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-orange-600 hover:bg-orange-50 transition-colors"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                                                    </svg>
+                                                    Leave business
+                                                </button>
+                                            )}
+
                                             <div className="border-t border-gray-100 my-1" />
                                             <button
                                                 onClick={() => {
@@ -791,6 +965,17 @@ export default function BusinessesPage() {
                     onConfirm={() => handleDelete(deletingBusiness.id)}
                     onClose={() => {
                         if (!deleteLoading) setDeletingBusiness(null)
+                    }}
+                />
+            )}
+
+            {leavingBusiness && (
+                <LeaveBusinessModal
+                    businessName={leavingBusiness.name}
+                    loading={leaveLoading}
+                    onConfirm={() => handleLeave(leavingBusiness.id)}
+                    onClose={() => {
+                        if (!leaveLoading) setLeavingBusiness(null)
                     }}
                 />
             )}
