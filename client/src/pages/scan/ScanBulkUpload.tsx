@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type DragEvent, type ChangeEv
 import { useNavigate } from 'react-router-dom'
 import Layout from '../../components/Layout'
 import UploadModeToggle from './UploadModeToggle'
+import BusinessSelector, { type BusinessOption } from '../dashboard/BusinessSelector'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 const MAX_FILES = 50 // matches upload.array("screenshots", 50) on the backend
@@ -15,9 +16,18 @@ function authHeaders() {
     return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-interface Business {
-    business_id: number | string
+// Raw shape returned by GET /business (same endpoint the Businesses page
+// uses). Not every field is guaranteed camelCase, so both variants are
+// accepted and normalized below — same pattern as BusinessesPage.tsx.
+interface RawBusiness {
+    business_id?: number | string
+    id?: number | string
     name: string
+    type?: string
+    logoUrl?: string | null
+    logo_url?: string | null
+    userRole?: string | null
+    user_role?: string | null
 }
 
 interface PendingFile {
@@ -57,7 +67,7 @@ export default function ScanBulkUpload() {
     // Same business-selection dance as ScanUpload: the token from login
     // has no role/businessId claims, so we exchange it for a
     // sessionToken scoped to the chosen business right before submitting.
-    const [businesses, setBusinesses] = useState<Business[]>([])
+    const [businesses, setBusinesses] = useState<BusinessOption[]>([])
     const [businessesLoading, setBusinessesLoading] = useState(false)
     const [selectedBusinessId, setSelectedBusinessId] = useState<string>('')
 
@@ -72,9 +82,18 @@ export default function ScanBulkUpload() {
             if (!res.ok || !data.success) {
                 throw new Error(data.message || 'Failed to load businesses')
             }
-            setBusinesses(data.data || [])
-            if (data.data?.length === 1) {
-                setSelectedBusinessId(String(data.data[0].business_id))
+
+            const normalized: BusinessOption[] = (data.data || []).map((b: RawBusiness) => ({
+                id: String(b.id ?? b.business_id),
+                name: b.name,
+                type: b.type ?? '',
+                logoUrl: b.logoUrl ?? b.logo_url ?? null,
+                userRole: b.userRole ?? b.user_role ?? null,
+            }))
+
+            setBusinesses(normalized)
+            if (normalized.length === 1) {
+                setSelectedBusinessId(normalized[0].id)
             }
         } catch (err) {
             console.error(err)
@@ -259,26 +278,19 @@ export default function ScanBulkUpload() {
             {/* Business selector */}
             <div className="mb-4 max-w-2xl">
                 <label className="text-xs font-medium text-gray-500 mb-1.5 block">Business</label>
-                <select
-                    value={selectedBusinessId}
-                    onChange={(e) => {
-                        setSelectedBusinessId(e.target.value)
+                <BusinessSelector
+                    businesses={businesses}
+                    selectedId={selectedBusinessId}
+                    onChange={(id) => {
+                        if (id === 'all') return // not selectable here; allowAll is off
+                        setSelectedBusinessId(id)
                         if (fieldErrors.businessId) setFieldErrors((prev) => ({ ...prev, businessId: undefined }))
                     }}
-                    disabled={businessesLoading}
-                    className={`w-full bg-gray-100 rounded-lg px-3 py-2.5 text-sm text-gray-700 outline-none focus:ring-2 ${
-                        fieldErrors.businessId ? 'ring-2 ring-red-200' : 'focus:ring-blue-200'
-                    }`}
-                >
-                    <option value="" disabled>
-                        {businessesLoading ? 'Loading businesses...' : 'Select a business'}
-                    </option>
-                    {businesses.map((b) => (
-                        <option key={b.business_id} value={String(b.business_id)}>
-                            {b.name}
-                        </option>
-                    ))}
-                </select>
+                    loading={businessesLoading}
+                    allowAll={false}
+                    fullWidth
+                    error={!!fieldErrors.businessId}
+                />
                 {fieldErrors.businessId && <p className="text-xs text-red-500 mt-1">{fieldErrors.businessId}</p>}
             </div>
 
