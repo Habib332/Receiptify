@@ -41,6 +41,8 @@ type Stats = {
     flaggedDuplicates: number
 }
 
+type ExportFormat = 'csv' | 'excel' | 'pdf'
+
 // The token that actually scopes /receipts, /receipts/stats, etc. is the
 // SESSION token (businessId + role baked in server-side by
 // auth.service.js#selectBusiness), not the identity token issued at
@@ -198,6 +200,14 @@ export default function Dashboard() {
     // Edit details modal
     const [editingReceipt, setEditingReceipt] = useState<Receipt | null>(null)
     const [editLoading, setEditLoading] = useState(false)
+
+    // Export dropdown open/closed state, plus a per-format loading flag
+    // (e.g. 'csv' | 'excel' | 'pdf') so only the clicked option shows a
+    // spinner and the trigger button disables while any export is in
+    // flight.
+    const [showExportMenu, setShowExportMenu] = useState(false)
+    const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null)
+    const exportMenuRef = useRef<HTMLDivElement | null>(null)
 
     // Notifications: owners/managers get notified when someone joins their
     // business. Bell icon opens a modal listing them; badge shows unread count.
@@ -409,6 +419,20 @@ export default function Dashboard() {
     }, [fetchNotifications])
 
     const unreadNotificationCount = notifications.filter((n) => !n.read).length
+
+    // Close the export dropdown on outside click, same pattern any
+    // dropdown menu needs since there's no backdrop element here.
+    useEffect(() => {
+        if (!showExportMenu) return
+        function handleClickOutside(e: MouseEvent) {
+            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+                setShowExportMenu(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [showExportMenu])
+
     // "All Businesses": there's no backend session that spans more than
     // one business, so this loops select-business -> fetch -> repeat for
     // every business the user belongs to and merges the results
@@ -648,6 +672,70 @@ export default function Dashboard() {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         } finally {
             setEditLoading(false)
+        }
+    }
+
+    // GET /receipts/export?format=csv|excel|pdf — same filter query params
+    // as the main list fetch (receipts.export.service.js reads them via
+    // getReceiptsForExport(businessId, filters), same contract as
+    // search). The route only knows the currently-selected business's
+    // session, so this is disabled in "All Businesses" mode. The server
+    // streams back a file buffer (receipts.export.service.js returns
+    // { buffer, filename, contentType }) with Content-Disposition set,
+    // so this just downloads the blob under the server-picked filename.
+    const handleExport = async (format: ExportFormat) => {
+        setShowExportMenu(false)
+        setExportingFormat(format)
+        setError('')
+        try {
+            await ensureSessionForReceipt(
+                selectedBusinessId === 'all' ? '' : selectedBusinessId
+            )
+
+            const params = new URLSearchParams()
+            params.set('format', format)
+            if (referenceSearch.trim()) params.set('reference', referenceSearch.trim())
+            if (dateFrom) params.set('dateFrom', dateFrom)
+            if (dateTo) params.set('dateTo', dateTo)
+            if (minAmount) params.set('minAmount', minAmount)
+            if (maxAmount) params.set('maxAmount', maxAmount)
+
+            const res = await fetch(`${API_BASE_URL}/receipts/export?${params.toString()}`, {
+                method: 'GET',
+                headers: jsonHeaders(),
+            })
+
+            if (!res.ok) {
+                let message = 'Failed to export receipts'
+                try {
+                    const data = await res.json()
+                    message = data.message || message
+                } catch {
+                    // Error response wasn't JSON — keep the default message.
+                }
+                throw new Error(message)
+            }
+
+            const blob = await res.blob()
+
+            // Prefer the server-picked filename (receipts-export-<businessId>-<date>.<ext>)
+            // from Content-Disposition; fall back to a sane default if it's missing.
+            const disposition = res.headers.get('Content-Disposition') || ''
+            const match = disposition.match(/filename="?([^"]+)"?/)
+            const filename = match?.[1] || `receipts-export.${format}`
+
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            window.URL.revokeObjectURL(url)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong exporting receipts')
+        } finally {
+            setExportingFormat(null)
         }
     }
 
@@ -941,11 +1029,70 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                     </svg>
                     Filter
                 </button>
+
+                {/* Export dropdown — GET /receipts/export?format=csv|excel|pdf,
+                    scoped to whichever single business is selected (disabled
+                    in "All Businesses" mode since the route has no
+                    cross-business concept). */}
+                <div className="relative" ref={exportMenuRef}>
+                    <button
+                        onClick={() => setShowExportMenu((v) => !v)}
+                        disabled={selectedBusinessId === 'all' || exportingFormat !== null}
+                        className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg px-4 py-2.5 border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {exportingFormat ? (
+                            <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                        )}
+                        Export
+                        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    {showExportMenu && (
+                        <div className="absolute right-0 top-11 z-10 w-48 bg-white border border-gray-100 rounded-xl shadow-lg py-1">
+                            <button
+                                onClick={() => handleExport('csv')}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                </svg>
+                                CSV
+                            </button>
+                            <button
+                                onClick={() => handleExport('excel')}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m-6-8h1M5.625 3h8.25c.621 0 1.125.504 1.125 1.125V9M5.625 3A1.125 1.125 0 004.5 4.125v15.75c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                </svg>
+                                Excel (XLSX)
+                            </button>
+                            <button
+                                onClick={() => handleExport('pdf')}
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                </svg>
+                                PDF
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {selectedBusinessId === 'all' && (
                 <p className="text-xs text-gray-400 mb-4 -mt-2">
-                    Showing receipts across all your businesses. Select a single business to search or filter.
+                    Showing receipts across all your businesses. Select a single business to search, filter or export.
                 </p>
             )}
 
