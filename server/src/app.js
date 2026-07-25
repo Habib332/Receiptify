@@ -10,6 +10,7 @@ const businessRoutes = require("./modules/business/business.routes");
 const receiptsRoutes = require("./modules/receipts/receipts.routes");
 const notificationsRoutes = require("./modules/notifications/notifications.routes");
 const userRoutes = require("./modules/users/user.routes");
+const passwordResetRoutes = require("./modules/passwordReset/passwordReset.routes");
 const app = express();
 
 // Core middleware
@@ -26,7 +27,7 @@ app.use("/api/business", businessRoutes);
 app.use("/api/receipts", receiptsRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationsRoutes);
-
+app.use("/api/password-reset", passwordResetRoutes);
 // Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({ success: true, message: "Server is running" });

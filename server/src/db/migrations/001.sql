@@ -251,6 +251,19 @@ CREATE TABLE IF NOT EXISTS upload_batches (
 );
 
 -- ==========================================================
+-- PASSWORD RESETS
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    reset_id        SERIAL PRIMARY KEY,
+    user_id         INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    token_hash      TEXT NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    used_at         TIMESTAMPTZ,          -- null until consumed; keeps a record instead of deleting
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ==========================================================
 -- INDEXES
 -- ==========================================================
 
@@ -319,6 +332,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS unique_pending_request_per_user
     ON business_join_requests (business_id, user_id)
     WHERE status = 'pending';
 
-ALTER TABLE receipts ADD COLUMN upload_status VARCHAR(20) NOT NULL DEFAULT 'draft';
+-- Password Resets
+CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash
+    ON password_resets(token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user_id
+    ON password_resets(user_id);
+
+-- ==========================================================
+-- COLUMN ADDITIONS (kept idempotent so this file can be re-run safely,
+-- since migrate.js has no applied-migrations tracking and replays every
+-- .sql file in the migrations folder on every run)
+-- ==========================================================
+
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS upload_status VARCHAR(20) NOT NULL DEFAULT 'draft';
 -- 'draft' = created by upload, not yet confirmed by user on Review
 -- 'confirmed' = user hit Save
