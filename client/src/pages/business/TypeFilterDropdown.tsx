@@ -33,7 +33,7 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
             <button
                 type="button"
                 onClick={() => setOpen((prev) => !prev)}
-                className={`flex items-center gap-2 pl-3 pr-3 py-2.5 rounded-lg border text-sm font-medium transition-colors min-w-[160px] ${
+                className={`flex items-center gap-2 pl-3 pr-3 py-2.5 rounded-lg border text-sm font-medium transition-colors w-full sm:w-auto sm:min-w-[160px] ${
                     open
                         ? 'border-blue-300 ring-2 ring-blue-100 bg-white'
                         : 'border-gray-200 bg-white hover:border-gray-300'
@@ -61,13 +61,13 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
             </button>
 
             {open && (
-                <div className="absolute z-20 mt-2 w-64 max-h-80 overflow-y-auto bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/60 p-1.5 animate-[fadeIn_0.12s_ease-out]">
+                <div className="absolute z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] max-h-80 overflow-y-auto bg-white border border-gray-100 rounded-xl shadow-lg shadow-gray-200/60 p-1.5 animate-[fadeIn_0.12s_ease-out]">
                     <button
                         onClick={() => {
                             onChange('All Types')
                             setOpen(false)
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                             isAllTypes ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
                         }`}
                     >
@@ -94,7 +94,7 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
                                     onChange(opt)
                                     setOpen(false)
                                 }}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                                     active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'
                                 }`}
                             >

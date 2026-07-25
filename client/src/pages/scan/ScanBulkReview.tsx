@@ -389,7 +389,7 @@ export default function ScanBulkReview() {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-xs font-medium text-gray-500 mb-1.5 block">Amount (PKR)</label>
                                 <input
@@ -424,7 +424,7 @@ export default function ScanBulkReview() {
                                 </svg>
                                 Transfer details
                             </p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs font-medium text-gray-500 mb-1.5 block">Receiver name</label>
                                     <input
@@ -507,29 +507,31 @@ export default function ScanBulkReview() {
                             />
                         </div>
 
-                        <div className="flex items-center gap-3 pt-3 sticky bottom-0 bg-white/80 backdrop-blur-sm -mx-1 px-1 pb-1">
-                            <button
-                                type="button"
-                                onClick={goPrevious}
-                                disabled={currentIndex === 0}
-                                className="border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent active:scale-[0.99] transition-all text-gray-700 text-sm font-semibold rounded-lg py-2.5 px-4"
-                            >
-                                Back
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSkip}
-                                className="border border-gray-200 hover:bg-gray-50 active:scale-[0.99] transition-all text-gray-500 text-sm font-semibold rounded-lg py-2.5 px-4"
-                            >
-                                {isLast ? 'Skip & finish' : 'Skip'}
-                            </button>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3 sticky bottom-0 bg-white/80 backdrop-blur-sm -mx-1 px-1 pb-1">
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 active:scale-[0.99] transition-all text-white text-sm font-semibold rounded-lg py-2.5 shadow-sm shadow-blue-200 disabled:shadow-none"
+                                className="order-1 sm:order-2 sm:flex-1 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 active:scale-[0.99] transition-all text-white text-sm font-semibold rounded-lg py-2.5 shadow-sm shadow-blue-200 disabled:shadow-none"
                             >
                                 {saving ? 'Saving...' : isLast ? 'Save & finish' : 'Save & next'}
                             </button>
+                            <div className="order-2 sm:order-1 flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={goPrevious}
+                                    disabled={currentIndex === 0}
+                                    className="flex-1 sm:flex-none border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent active:scale-[0.99] transition-all text-gray-700 text-sm font-semibold rounded-lg py-2.5 px-4"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleSkip}
+                                    className="flex-1 sm:flex-none border border-gray-200 hover:bg-gray-50 active:scale-[0.99] transition-all text-gray-500 text-sm font-semibold rounded-lg py-2.5 px-4"
+                                >
+                                    {isLast ? 'Skip & finish' : 'Skip'}
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>

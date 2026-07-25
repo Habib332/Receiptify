@@ -130,7 +130,7 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
                     <h2 className="text-lg font-bold text-gray-900">Edit Business</h2>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
+                        className="min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -258,14 +258,14 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700 text-sm font-semibold rounded-lg py-2.5"
+                            className="flex-1 border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700 text-sm font-semibold rounded-lg min-h-[44px]"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-sm font-semibold rounded-lg py-2.5"
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-sm font-semibold rounded-lg min-h-[44px]"
                         >
                             {saving ? 'Saving...' : 'Save Changes'}
                         </button>

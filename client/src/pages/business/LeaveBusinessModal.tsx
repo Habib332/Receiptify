@@ -18,11 +18,11 @@ export default function LeaveBusinessModal({ businessName, loading, onConfirm, o
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4"
             onClick={() => !loading && onClose()}
         >
             <div
-                className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-6"
+                className="w-full max-w-sm max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sm:p-6"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="w-11 h-11 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mb-4">
@@ -42,14 +42,14 @@ export default function LeaveBusinessModal({ businessName, loading, onConfirm, o
                     <button
                         onClick={onClose}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                        className="flex-1 h-11 rounded-lg text-sm font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 transition-colors disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={onConfirm}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 flex items-center justify-center"
+                        className="flex-1 h-11 rounded-lg text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-50 flex items-center justify-center"
                     >
                         {loading ? 'Leaving...' : 'Leave business'}
                     </button>

@@ -182,7 +182,7 @@ export default function TeamModal({ businessId, businessName, currentUserRole, o
                             {members.map((member) => {
                                 const style = roleStyles[member.role] ?? roleStyles.staff
                                 return (
-                                    <div key={member.id} className="flex items-center gap-3 px-5 py-3.5">
+                                    <div key={member.id} className="flex flex-wrap items-center gap-y-2 gap-x-3 px-5 py-3.5">
                                         <div className="w-9 h-9 rounded-full bg-gray-100 text-gray-500 text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden">
                                             {member.avatarUrl ? (
                                                 <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
@@ -190,7 +190,7 @@ export default function TeamModal({ businessId, businessName, currentUserRole, o
                                                 initials(member.name)
                                             )}
                                         </div>
-                                        <div className="flex-1 min-w-0">
+                                        <div className="flex-1 min-w-[120px]">
                                             <p className="text-sm font-semibold text-gray-900 truncate">{member.name}</p>
                                             {member.email && (
                                                 <p className="text-xs text-gray-400 truncate">{member.email}</p>
@@ -205,7 +205,7 @@ export default function TeamModal({ businessId, businessName, currentUserRole, o
                                                     setRemoveError('')
                                                     setRemoveTarget(member)
                                                 }}
-                                                className="text-[11px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full px-2.5 py-1 shrink-0 transition-colors"
+                                                className="text-[11px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full px-2.5 py-1.5 shrink-0 transition-colors"
                                             >
                                                 Remove
                                             </button>
@@ -220,7 +220,7 @@ export default function TeamModal({ businessId, businessName, currentUserRole, o
 
             {removeTarget && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
-                    <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+                    <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5 sm:p-6">
                         <div className="w-11 h-11 rounded-full bg-red-50 text-red-500 flex items-center justify-center mb-4">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -237,18 +237,18 @@ export default function TeamModal({ businessId, businessName, currentUserRole, o
                                 {removeError}
                             </div>
                         )}
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col sm:flex-row items-stretch gap-3">
                             <button
                                 onClick={() => setRemoveTarget(null)}
                                 disabled={removeLoading}
-                                className="flex-1 h-10 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                className="flex-1 h-11 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleRemove}
                                 disabled={removeLoading}
-                                className="flex-1 h-10 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                                className="flex-1 h-11 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
                             >
                                 {removeLoading ? 'Removing...' : 'Remove'}
                             </button>

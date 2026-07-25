@@ -24,7 +24,7 @@ export default function ErrorModal({ title = 'Something went wrong', message, on
 
                 <button
                     onClick={onClose}
-                    className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg py-2.5"
+                    className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg min-h-[44px]"
                 >
                     Got it
                 </button>

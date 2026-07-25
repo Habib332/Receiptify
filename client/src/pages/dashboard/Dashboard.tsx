@@ -820,16 +820,16 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
     return (
         <Layout>
             <div className="flex items-start justify-between mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Receipts</h1>
-                    <p className="text-sm text-gray-400 mt-1">View, search and manage all your scanned receipts.</p>
+                <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Receipts</h1>
+                    <p className="text-xs sm:text-sm text-gray-400 mt-1">View, search and manage all your scanned receipts.</p>
                 </div>
                 <button
                     onClick={() => {
                         setShowNotifications(true)
                         fetchNotifications()
                     }}
-                    className="relative w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
+                    className="relative w-11 h-11 shrink-0 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors"
                 >
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
@@ -849,9 +849,9 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
             )}
 
             {/* Hero banner */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl px-8 py-8 mb-6 flex items-center justify-between">
+            <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl px-5 py-6 sm:px-8 sm:py-8 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="max-w-md">
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
                         All your receipts, <span className="text-blue-600">organized.</span>
                     </h2>
                     <p className="text-sm text-gray-500 mb-5">
@@ -860,7 +860,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                     <div className="flex items-center gap-3">
                         <a
                             href="/scan"
-                            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors"
+                            className="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors w-full sm:w-auto"
                         >
                             <span className="text-base leading-none">+</span> Upload Receipt
                         </a>
@@ -997,16 +997,18 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
             </div>
 
             {/* Business selector + search & filters */}
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-                <BusinessSelector
-                    businesses={businesses}
-                    selectedId={selectedBusinessId}
-                    onChange={setSelectedBusinessId}
-                    loading={businessesLoading}
-                    switching={switchingBusiness}
-                />
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-4">
+                <div className="w-full sm:w-auto">
+                    <BusinessSelector
+                        businesses={businesses}
+                        selectedId={selectedBusinessId}
+                        onChange={setSelectedBusinessId}
+                        loading={businessesLoading}
+                        switching={switchingBusiness}
+                    />
+                </div>
 
-                <div className="relative flex-1 min-w-[220px]">
+                <div className="relative w-full sm:flex-1 sm:min-w-[220px]">
                     <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
                     </svg>
@@ -1019,12 +1021,13 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                     />
                 </div>
 
+                <div className="flex items-center gap-3 w-full sm:w-auto">
                 <button
                     onClick={() => setShowFilterPanel((v) => !v)}
                     disabled={selectedBusinessId === 'all'}
-                    className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
                     </svg>
                     Filter
@@ -1034,11 +1037,11 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                     scoped to whichever single business is selected (disabled
                     in "All Businesses" mode since the route has no
                     cross-business concept). */}
-                <div className="relative" ref={exportMenuRef}>
+                <div className="relative flex-1 sm:flex-none" ref={exportMenuRef}>
                     <button
                         onClick={() => setShowExportMenu((v) => !v)}
                         disabled={selectedBusinessId === 'all' || exportingFormat !== null}
-                        className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg px-4 py-2.5 border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg px-4 py-2.5 border border-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {exportingFormat ? (
                             <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
@@ -1060,7 +1063,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                         <div className="absolute right-0 top-11 z-10 w-48 bg-white border border-gray-100 rounded-xl shadow-lg py-1">
                             <button
                                 onClick={() => handleExport('csv')}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -1069,7 +1072,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                             </button>
                             <button
                                 onClick={() => handleExport('excel')}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m-6-8h1M5.625 3h8.25c.621 0 1.125.504 1.125 1.125V9M5.625 3A1.125 1.125 0 004.5 4.125v15.75c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -1078,7 +1081,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                             </button>
                             <button
                                 onClick={() => handleExport('pdf')}
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             >
                                 <svg className="w-4 h-4 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -1087,6 +1090,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                             </button>
                         </div>
                     )}
+                </div>
                 </div>
             </div>
 
@@ -1156,8 +1160,8 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
             </h3>
 
             {/* Receipts table */}
-            <div className="border border-gray-100 rounded-2xl overflow-visible mb-4">
-                <table className="w-full text-sm">
+            <div className="border border-gray-100 rounded-2xl overflow-x-auto overflow-y-visible mb-4">
+                <table className="w-full min-w-[820px] text-sm">
                     <thead>
                         <tr className="border-b border-gray-100 text-left text-xs text-gray-400">
                             <th className="font-medium px-5 py-3">Date</th>
@@ -1222,7 +1226,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                                         <div className="flex items-center justify-end gap-2">
                                             <button
                                                 onClick={() => setOpenMenuId(openMenuId === row.receipt_id ? null : row.receipt_id)}
-                                                className="text-gray-300 hover:text-gray-600 transition-colors"
+                                                className="p-2.5 -m-1 text-gray-300 hover:text-gray-600 transition-colors"
                                             >
                                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M12 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM12 21a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
@@ -1238,7 +1242,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                                                             setOpenMenuId(null)
                                                             setEditingReceipt(row)
                                                         }}
-                                                        className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                                        className="w-full flex items-center gap-2 px-3.5 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                                     >
                                                         <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
@@ -1250,7 +1254,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                                                 {row.duplicate_status === 'flagged' && (
                                                     <button
                                                         onClick={() => handleResolveDuplicate(row, false)}
-                                                        className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                                                        className="w-full text-left px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
                                                     >
                                                         Unflag as duplicate
                                                     </button>
@@ -1264,7 +1268,7 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                                                                 setOpenMenuId(null)
                                                                 setDeletingReceipt(row)
                                                             }}
-                                                            className="w-full flex items-center gap-2 px-3.5 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                                                            className="w-full flex items-center gap-2 px-3.5 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
                                                         >
                                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                                                 <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -1290,11 +1294,11 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
             {/* Pagination — client-side, since the API returns the full
                 matching set rather than a paginated page. */}
             {receipts.length > 0 && (
-                <div className="flex items-center justify-between px-1 pb-8">
-                    <span className="text-xs text-gray-400">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 pb-8">
+                    <span className="text-xs text-gray-400 text-center sm:text-left">
                         Showing {(page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, receipts.length)} of {receipts.length} receipts
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap justify-center">
                         <button
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={page === 1}

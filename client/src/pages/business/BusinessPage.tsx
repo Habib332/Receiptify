@@ -610,9 +610,9 @@ export default function BusinessesPage() {
             )}
 
             {/* Hero banner */}
-            <div className="bg-blue-50/60 rounded-2xl px-8 py-8 mb-6 flex items-center justify-between overflow-hidden">
+            <div className="bg-blue-const rounded-2xl px-5 py-6 sm:px-8 sm:py-8 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 overflow-hidden">
                 <div className="max-w-sm">
-                    <h2 className="text-2xl font-bold text-gray-900">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                         All your businesses, <span className="text-blue-600">organized</span>.
                     </h2>
                     <p className="text-sm text-gray-500 mt-2 mb-5">
@@ -620,7 +620,7 @@ export default function BusinessesPage() {
                     </p>
                     <button
                         onClick={() => setShowAddModal(true)}
-                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 py-2.5"
+                        className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 min-h-[44px]"
                     >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -654,8 +654,8 @@ export default function BusinessesPage() {
             </div>
 
             {/* Search + filter + add */}
-            <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                <div className="flex-1 flex items-center gap-2 border border-gray-200 rounded-lg px-3 min-h-[44px]">
                     <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
@@ -664,21 +664,23 @@ export default function BusinessesPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search businesses..."
-                        className="flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+                        className="flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400 h-full"
                     />
                 </div>
 
-                <TypeFilterDropdown value={typeFilter} options={businessTypes} onChange={setTypeFilter} />
+                <div className="flex items-center gap-3">
+                    <TypeFilterDropdown value={typeFilter} options={businessTypes} onChange={setTypeFilter} />
 
-                <button
-                    onClick={() => setShowAddModal(true)}
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 py-2.5 whitespace-nowrap"
-                >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    Add Business
-                </button>
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 min-h-[44px] whitespace-nowrap"
+                    >
+                        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        Add Business
+                    </button>
+                </div>
             </div>
 
             {/* My Businesses / All Businesses toggle. Compact segmented
@@ -759,18 +761,20 @@ export default function BusinessesPage() {
                     // rather than shown-then-rejected by the API.
                     const canLeave = biz.userRole === 'manager' || biz.userRole === 'staff'
                     return (
-                        <div key={biz.id} className="flex items-center gap-4 px-5 py-4">
-                            <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
-                                {biz.logoUrl ? (
-                                    <img src={biz.logoUrl} alt={`${biz.name} logo`} className="w-full h-full object-cover" />
-                                ) : (
-                                    icon
-                                )}
-                            </div>
+                        <div key={biz.id} className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 px-4 sm:px-5 py-4">
+                            <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                                <div className={`w-10 h-10 rounded-lg ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>
+                                    {biz.logoUrl ? (
+                                        <img src={biz.logoUrl} alt={`${biz.name} logo`} className="w-full h-full object-cover" />
+                                    ) : (
+                                        icon
+                                    )}
+                                </div>
 
-                            <div className="w-48 shrink-0">
-                                <p className="text-sm font-semibold text-gray-900">{biz.name}</p>
-                                <p className="text-xs text-gray-400">{biz.type}</p>
+                                <div className="min-w-0 md:w-48 md:shrink-0">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{biz.name}</p>
+                                    <p className="text-xs text-gray-400">{biz.type}</p>
+                                </div>
                             </div>
 
                             <div className="flex-1 min-w-0">
@@ -789,29 +793,31 @@ export default function BusinessesPage() {
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 shrink-0">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
-                                </svg>
-                                <div className="leading-tight">
-                                    <button className="text-sm font-semibold capitalize" onClick={() => navigateToReceiptsPage(biz)}>
-                                        Receipts
-                                    </button>
-                                </div>
-                            </div>
-
-                            {biz.userRole && (
-                                <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 shrink-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-lg px-3 py-2 shrink-0">
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
                                     </svg>
                                     <div className="leading-tight">
-                                        <p className="text-sm font-semibold capitalize">{biz.userRole}</p>
+                                        <button className="text-sm font-semibold capitalize" onClick={() => navigateToReceiptsPage(biz)}>
+                                            Receipts
+                                        </button>
                                     </div>
                                 </div>
-                            )}
 
-                            <div className="flex items-center gap-1.5 shrink-0">
+                                {biz.userRole && (
+                                    <div className="flex items-center gap-2 bg-green-50 text-green-700 rounded-lg px-3 py-2 shrink-0">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        <div className="leading-tight">
+                                            <p className="text-sm font-semibold capitalize">{biz.userRole}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0 justify-end md:justify-start">
                                 <button
                                     disabled={joinButtonDisabled}
                                     onClick={() => {
@@ -819,7 +825,7 @@ export default function BusinessesPage() {
                                             setJoiningBusiness(biz)
                                         }
                                     }}
-                                    className={`min-w-[96px] h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors border
+                                    className={`min-w-[96px] min-h-[44px] md:h-8 rounded-lg text-sm font-medium flex items-center justify-center transition-colors border
         ${joinButtonDisabled
                                             ? 'bg-white text-blue-600 border-blue-600 cursor-default'
                                             : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
@@ -833,7 +839,7 @@ export default function BusinessesPage() {
                                             e.stopPropagation()
                                             setOpenMenuId(openMenuId === biz.id ? null : biz.id)
                                         }}
-                                        className="w-8 h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
+                                        className="min-w-[44px] min-h-[44px] md:w-8 md:h-8 rounded-lg bg-gray-50 text-gray-400 hover:text-gray-600 flex items-center justify-center transition-colors"
                                     >
                                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                                             <path d="M12 6.75a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
@@ -843,7 +849,7 @@ export default function BusinessesPage() {
                                     {openMenuId === biz.id && (
                                         <div
                                             onClick={(e) => e.stopPropagation()}
-                                            className="absolute right-0 top-9 w-40 bg-white border border-gray-100 rounded-xl shadow-lg py-1.5 z-10"
+                                            className="absolute right-0 top-9 w-40 max-w-[calc(100vw-2rem)] bg-white border border-gray-100 rounded-xl shadow-lg py-1.5 z-10"
                                         >
                                             <button
                                                 onClick={() => {

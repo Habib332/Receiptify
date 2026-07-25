@@ -277,7 +277,7 @@ export default function ScanUpload() {
                     }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    className={`max-w-2xl border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center px-8 py-16 transition-colors ${
+                    className={`max-w-2xl border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center px-4 py-10 sm:px-8 sm:py-16 transition-colors ${
                         isDragging ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'
                     }`}
                 >
@@ -295,10 +295,10 @@ export default function ScanUpload() {
                     </p>
                     <p className="text-xs text-gray-400 mb-6">or choose an option below · JPG, PNG up to 10MB</p>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                         <button
                             onClick={() => fileInputRef.current?.click()}
-                            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 py-2.5"
+                            className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 transition-colors text-white text-sm font-semibold rounded-lg px-4 py-2.5 w-full sm:w-auto"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -307,7 +307,7 @@ export default function ScanUpload() {
                         </button>
                         <button
                             onClick={() => cameraInputRef.current?.click()}
-                            className="inline-flex items-center gap-2 border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700 text-sm font-semibold rounded-lg px-4 py-2.5"
+                            className="inline-flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 transition-colors text-gray-700 text-sm font-semibold rounded-lg px-4 py-2.5 w-full sm:w-auto"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                                 <path

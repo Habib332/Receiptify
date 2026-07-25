@@ -23,14 +23,14 @@ export default function DeleteConfirmModal({ businessName, loading, onConfirm, o
                     <button
                         onClick={onClose}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                        className="flex-1 min-h-[44px] rounded-lg border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={onConfirm}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                        className="flex-1 min-h-[44px] rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
                     >
                         {loading ? 'Deleting...' : 'Delete'}
                     </button>

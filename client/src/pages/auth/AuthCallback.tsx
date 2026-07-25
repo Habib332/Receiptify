@@ -58,13 +58,13 @@ export default function AuthCallback() {
 
     if (error) {
         return (
-            <div className="h-screen w-full bg-white flex flex-col items-center justify-center gap-3">
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <div className="min-h-screen w-full bg-white flex flex-col items-center justify-center gap-3 p-4 text-center">
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 max-w-sm">
                     {error}
                 </p>
                 <button
                     onClick={() => navigate('/sign-in')}
-                    className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors"
+                    className="text-xs text-blue-600 font-medium hover:text-blue-700 transition-colors min-h-[44px] px-3"
                 >
                     Back to sign in
                 </button>
@@ -73,7 +73,7 @@ export default function AuthCallback() {
     }
 
     return (
-        <div className="h-screen w-full bg-white flex items-center justify-center">
+        <div className="min-h-screen w-full bg-white flex items-center justify-center p-4">
             <p className="text-xs text-gray-500">Signing you in...</p>
         </div>
     )

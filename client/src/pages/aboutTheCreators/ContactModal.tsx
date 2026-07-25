@@ -4,9 +4,9 @@ type Props = {
 
 export default function ContactModal({ onClose }: Props) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
 
-            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto overscroll-contain">
 
                 <div className="flex items-start justify-between">
 
@@ -83,7 +83,7 @@ export default function ContactModal({ onClose }: Props) {
 
                     <button
                         onClick={onClose}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2.5 font-medium transition-colors"
+                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2.5 font-medium transition-colors"
                     >
                         Close
                     </button>

@@ -32,7 +32,7 @@ export default function AboutReceiptifyPage() {
   return (
     <Layout>
       {/* Hero */}
-      <div className="bg-blue-50/60 rounded-2xl px-8 py-8 mb-6 flex items-center justify-between overflow-hidden">
+      <div className="bg-blue-50/60 rounded-2xl px-5 py-7 sm:px-8 sm:py-8 mb-6 flex items-center justify-between overflow-hidden">
         <div className="max-w-lg">
           <p className="uppercase tracking-[0.25em] text-xs text-blue-600 font-semibold mb-2">
             ABOUT RECEIPTIFY
@@ -94,7 +94,7 @@ export default function AboutReceiptifyPage() {
       </div>
 
       {/* About Project */}
-      <div className="border border-gray-100 rounded-2xl p-8 mb-8">
+      <div className="border border-gray-100 rounded-2xl p-5 sm:p-8 mb-8">
         <p className="text-xs uppercase tracking-[0.25em] text-gray-400 font-semibold mb-3">
           ABOUT RECEIPTIFY
         </p>

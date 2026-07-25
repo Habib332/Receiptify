@@ -120,9 +120,9 @@ export default function NotificationsModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/20" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center sm:justify-end bg-black/20 px-4 sm:px-0" onClick={onClose}>
             <div
-                className="mt-16 mr-6 w-96 max-h-[70vh] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden"
+                className="mt-16 sm:mr-6 w-full max-w-sm sm:w-96 max-h-[70vh] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
@@ -138,7 +138,7 @@ export default function NotificationsModal({
                         )}
                         <button
                             onClick={onClose}
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50"
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50"
                         >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -204,14 +204,14 @@ export default function NotificationsModal({
                                             <button
                                                 onClick={() => handleDecision(n, 'reject')}
                                                 disabled={isActing}
-                                                className="text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 disabled:opacity-50 rounded-lg px-3 py-1.5 border border-red-200 hover:border-red-600 transition-colors"
+                                                className="text-xs font-semibold text-red-600 hover:text-white hover:bg-red-600 disabled:opacity-50 rounded-lg px-3 py-2 border border-red-200 hover:border-red-600 transition-colors"
                                             >
                                                 Reject
                                             </button>
                                             <button
                                                 onClick={() => handleDecision(n, 'approve')}
                                                 disabled={isActing}
-                                                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg px-3 py-1.5 transition-colors"
+                                                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg px-3 py-2 transition-colors"
                                             >
                                                 {isActing ? '...' : 'Approve'}
                                             </button>

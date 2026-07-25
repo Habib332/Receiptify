@@ -326,7 +326,7 @@ export default function ScanBulkUpload() {
                 }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
-                className={`max-w-2xl border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center px-8 py-12 transition-colors ${
+                className={`max-w-2xl border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center px-4 py-8 sm:px-8 sm:py-12 transition-colors ${
                     isDragging ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'
                 }`}
             >

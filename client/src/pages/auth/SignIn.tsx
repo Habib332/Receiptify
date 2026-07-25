@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import illustration from '../../assets/sign-in.png'
+import illustration from '../../assets/sign-up.png'
 import ReceiptLogo from '../../logo/MainLogo'
 import GoogleLogo from '../../logo/GoogleLogo'
 import AppleLogo from '../../logo/AppleLogo'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
-export default function SignIn() {
+export default function SignUp() {
     const navigate = useNavigate()
 
+    const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
 
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -20,24 +22,29 @@ export default function SignIn() {
         e.preventDefault()
         setError('')
 
-        if (!email || !password) {
+        if (!name || !email || !password || !confirmPassword) {
             setError('Please fill in all fields')
+            return
+        }
+
+        if (password !== confirmPassword) {
+            setError('Passwords do not match')
             return
         }
 
         setLoading(true)
 
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/login`, {
+            const res = await fetch(`${API_BASE_URL}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ name, email, password }),
             })
 
             const data = await res.json()
 
             if (!res.ok || !data.success) {
-                throw new Error(data.message || 'Login failed')
+                throw new Error(data.message || 'Registration failed')
             }
 
             const token = data.data?.identityToken
@@ -50,7 +57,6 @@ export default function SignIn() {
                 sessionStorage.setItem('user', JSON.stringify(user))
             }
 
-
             navigate('/select-business')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -60,10 +66,10 @@ export default function SignIn() {
     }
 
     return (
-        <div className="h-screen w-full bg-white flex items-center justify-center overflow-hidden p-4">
-            <div className="w-full max-w-4xl h-full max-h-[560px] flex flex-col lg:flex-row items-stretch gap-6 lg:gap-8">
+        <div className="min-h-screen w-full bg-white flex items-center justify-center overflow-x-hidden p-4 py-8 sm:py-4">
+            <div className="w-full max-w-4xl lg:h-full lg:max-h-[560px] flex flex-col lg:flex-row items-stretch gap-6 lg:gap-8">
                 {/* Left illustration panel */}
-                <div className="w-full lg:w-[42%] bg-gray-100 rounded-2xl overflow-hidden relative min-h-[220px] lg:min-h-0">
+                <div className="hidden sm:block w-full lg:w-[42%] bg-gray-100 rounded-2xl overflow-hidden relative min-h-[220px] lg:min-h-0">
                     <div className="absolute top-5 left-5">
                     </div>
                     <img
@@ -74,7 +80,7 @@ export default function SignIn() {
                 </div>
 
                 {/* Right form panel */}
-                <div className="w-full lg:w-[58%] flex flex-col justify-center px-2 sm:px-6 lg:px-8">
+                <div className="w-full lg:w-[58%] flex flex-col justify-center px-4 sm:px-6 lg:px-8">
                     <div className="w-full max-w-sm mx-auto lg:mx-0">
                         {/* Logo */}
                         <div className="mb-5">
@@ -83,27 +89,28 @@ export default function SignIn() {
 
                         {/* Heading */}
                         <h1 className="text-2xl font-bold text-gray-900">
-                            Sign in
+                            Create an account
                         </h1>
 
                         <p className="text-xs text-gray-500 mt-2 mb-5">
-                            Sign in with Open account
+                            Sign up with Open account
                         </p>
 
                         {/* Social Login */}
-                              {/* Social Login */}
                         <div className="grid grid-cols-2 gap-2.5 mb-4">
-                            
-                            <a href={`${API_BASE_URL}/auth/google`} className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                            <GoogleLogo />
-                             Google
+                            <a href={`${API_BASE_URL}/auth/google`}
+                                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg min-h-[44px] py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                            >
+                                <GoogleLogo/>
+                                Google
                             </a>
+
                             <button
                                 type="button"
-                                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                                className="flex items-center justify-center gap-2 border border-gray-200 rounded-lg min-h-[44px] py-2.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                             >
-                                <AppleLogo />
-                                Apple ID
+                                <AppleLogo/>
+                                    Apple ID
                             </button>
                         </div>
                     </div>
@@ -121,7 +128,30 @@ export default function SignIn() {
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-2.5">
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2.5">
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 min-h-[44px]">
+                            <svg
+                                className="w-4 h-4 text-gray-400 shrink-0"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={1.8}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+                                />
+                            </svg>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Full name"
+                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400 h-full"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 min-h-[44px]">
                             <svg
                                 className="w-4 h-4 text-gray-400 shrink-0"
                                 fill="none"
@@ -140,11 +170,11 @@ export default function SignIn() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="Email address"
-                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400"
+                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400 h-full"
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2.5">
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 min-h-[44px]">
                             <svg
                                 className="w-4 h-4 text-gray-400 shrink-0"
                                 fill="none"
@@ -163,23 +193,46 @@ export default function SignIn() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="Password"
-                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400 tracking-widest"
+                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400 tracking-widest h-full"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 min-h-[44px]">
+                            <svg
+                                className="w-4 h-4 text-gray-400 shrink-0"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={1.8}
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.286z"
+                                />
+                            </svg>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                placeholder="Confirm password"
+                                className="bg-transparent flex-1 text-xs text-gray-700 outline-none placeholder:text-gray-400 tracking-widest h-full"
                             />
                         </div>
 
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-xs font-semibold rounded-lg py-2.5 mt-2"
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 transition-colors text-white text-xs font-semibold rounded-lg min-h-[44px] mt-2"
                         >
-                            {loading ? 'Signing in...' : 'Start tracking'}
+                            {loading ? 'Creating account...' : 'Create account'}
                         </button>
                     </form>
 
                     <p className="text-xs text-gray-500 text-center mt-4">
-                        Don't have an account?{' '}
-                        <a href="/sign-up" className="text-blue-600 font-medium hover:text-blue-700 transition-colors">
-                            Sign up
+                        Already have an account?{' '}
+                        <a href="/sign-in" className="text-blue-600 font-medium hover:text-blue-700 transition-colors">
+                            Sign in
                         </a>
                     </p>
 

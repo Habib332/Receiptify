@@ -138,7 +138,7 @@ export default function AboutTheCreatorsPage() {
                 ))}
             </div>
 
-            <div className="bg-blue-50/60 rounded-2xl px-8 py-8 overflow-hidden">
+            <div className="bg-blue-50/60 rounded-2xl px-5 py-7 sm:px-8 sm:py-8 overflow-hidden">
                 <div className="max-w-3xl">
                     <p className="text-xs uppercase tracking-[0.25em] text-blue-600 font-semibold mb-2">
                         THANK YOU
@@ -153,10 +153,10 @@ export default function AboutTheCreatorsPage() {
                         size. We hope this platform helps you spend less time managing
                         paperwork and more time growing your business.
                     </p>
-                    <div className="flex flex-wrap gap-4 mt-8">
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-4 mt-8">
                         <button
                             onClick={() => setShowContactModal(true)}
-                            className="inline-flex items-center gap-2
+                            className="inline-flex items-center justify-center gap-2
                             bg-blue-600
                             hover:bg-blue-700
                             transition-colors
@@ -164,7 +164,8 @@ export default function AboutTheCreatorsPage() {
                             rounded-lg
                             px-5
                             py-2.5
-                            font-semibold"
+                            font-semibold
+                            w-full sm:w-auto"
                         >
                             <svg
                                 className="w-5 h-5"
@@ -183,7 +184,7 @@ export default function AboutTheCreatorsPage() {
                         </button>
                         <a
                             href="/about-receiptify"
-                            className="inline-flex items-center gap-2
+                            className="inline-flex items-center justify-center gap-2
                             border border-gray-200
                             hover:border-blue-300
                             hover:text-blue-600
@@ -192,7 +193,8 @@ export default function AboutTheCreatorsPage() {
                             px-5
                             py-2.5
                             text-gray-700
-                            font-semibold"
+                            font-semibold
+                            w-full sm:w-auto"
                         >
                             <svg
                                 className="w-5 h-5"

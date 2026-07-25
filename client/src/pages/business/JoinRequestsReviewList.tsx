@@ -107,31 +107,33 @@ export default function JoinRequestsReviewList({ businessId }: Props) {
                 {requests.map((r) => {
                     const isActing = pendingActionId === r.request_id
                     return (
-                        <div key={r.request_id} className="px-5 py-4 flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-semibold text-sm">
-                                {r.user_name?.[0]?.toUpperCase() ?? '?'}
+                        <div key={r.request_id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-start gap-3">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 font-semibold text-sm">
+                                    {r.user_name?.[0]?.toUpperCase() ?? '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{r.user_name}</p>
+                                    <p className="text-xs text-gray-400 truncate">{r.user_email}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Wants to join as{' '}
+                                        <span className="font-medium capitalize">{r.requested_role}</span> ·{' '}
+                                        {timeAgo(r.created_at)}
+                                    </p>
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">{r.user_name}</p>
-                                <p className="text-xs text-gray-400 truncate">{r.user_email}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    Wants to join as{' '}
-                                    <span className="font-medium capitalize">{r.requested_role}</span> ·{' '}
-                                    {timeAgo(r.created_at)}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0 justify-end sm:justify-start pl-12 sm:pl-0">
                                 <button
                                     onClick={() => handleDecision(r.request_id, 'reject')}
                                     disabled={isActing}
-                                    className="text-xs font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"
+                                    className="text-xs font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors"
                                 >
                                     Reject
                                 </button>
                                 <button
                                     onClick={() => handleDecision(r.request_id, 'approve')}
                                     disabled={isActing}
-                                    className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg px-3 py-1.5 transition-colors"
+                                    className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg px-3 py-2 transition-colors"
                                 >
                                     {isActing ? '...' : 'Approve'}
                                 </button>
@@ -143,14 +145,3 @@ export default function JoinRequestsReviewList({ businessId }: Props) {
         </div>
     )
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -41,7 +41,7 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
             <button
                 onClick={() => !disabled && setOpen((v) => !v)}
                 disabled={disabled}
-                className="flex items-center gap-2.5 border border-gray-200 rounded-lg pl-2 pr-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors min-w-[200px] disabled:opacity-60 disabled:cursor-wait"
+                className="flex items-center gap-2.5 border border-gray-200 rounded-lg pl-2 pr-3 py-2.5 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors w-full sm:w-auto sm:min-w-[200px] disabled:opacity-60 disabled:cursor-wait"
             >
                 {selected ? (
                     <span className="w-6 h-6 rounded-md bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
@@ -100,13 +100,13 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
             </button>
 
             {open && (
-                <div className="absolute left-0 top-full mt-1.5 z-20 w-64 bg-white border border-gray-100 rounded-xl shadow-lg py-1 max-h-80 overflow-y-auto">
+                <div className="absolute left-0 top-full mt-1.5 z-20 w-[min(16rem,calc(100vw-2rem))] bg-white border border-gray-100 rounded-xl shadow-lg py-1 max-h-80 overflow-y-auto">
                     <button
                         onClick={() => {
                             onChange('all')
                             setOpen(false)
                         }}
-                        className={`w-full flex items-center gap-2.5 text-left px-3 py-2 text-sm hover:bg-gray-50 ${selectedId === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'
+                        className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 text-sm hover:bg-gray-50 ${selectedId === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'
                             }`}
                     >
                         <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
@@ -133,7 +133,7 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
                                     onChange(biz.id)
                                     setOpen(false)
                                 }}
-                                className={`w-full flex items-center gap-2.5 text-left px-3 py-2 text-sm hover:bg-gray-50 ${isSelected ? 'text-blue-600 font-medium' : 'text-gray-700'
+                                className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 text-sm hover:bg-gray-50 ${isSelected ? 'text-blue-600 font-medium' : 'text-gray-700'
                                     }`}
                             >
                                 <span className={`w-6 h-6 rounded-md ${biz.logoUrl ? 'bg-gray-100' : bg} ${color} flex items-center justify-center shrink-0 overflow-hidden`}>

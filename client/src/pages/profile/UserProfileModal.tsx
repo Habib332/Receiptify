@@ -96,19 +96,43 @@ function HoverStatCard({
 
     return (
         <div
-            className="relative border border-gray-100 rounded-2xl p-4"
+            className="relative border border-gray-100 rounded-2xl p-4 cursor-pointer select-none"
             onMouseEnter={() => setOpen(true)}
             onMouseLeave={() => setOpen(false)}
+            onClick={() => setOpen((prev) => !prev)}
+            role="button"
+            tabIndex={0}
+            aria-expanded={open}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setOpen((prev) => !prev)
+                }
+            }}
         >
-            <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-4`}>
-                {icon}
+            <div className="flex items-start justify-between">
+                <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-4`}>
+                    {icon}
+                </div>
+                <svg
+                    className={`w-4 h-4 text-gray-300 transition-transform mt-1 ${open ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
             </div>
             <p className="text-xs text-gray-400 mb-1">{label}</p>
             <p className="text-xl font-bold text-gray-900">{value}</p>
             <p className="text-xs text-gray-400 mt-1">{sub}</p>
 
             {open && (
-                <div className="absolute left-0 top-full mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-lg z-20 py-2 max-h-64 overflow-y-auto">
+                <div
+                    className="absolute left-0 top-full mt-2 w-full sm:w-72 bg-white border border-gray-100 rounded-xl shadow-lg z-20 py-2 max-h-64 overflow-y-auto"
+                    onClick={(e) => e.stopPropagation()}
+                >
                     {items.length === 0 ? (
                         <p className="px-3 py-2 text-xs text-gray-400">{emptyLabel}</p>
                     ) : (
@@ -174,11 +198,11 @@ export default function UserProfileModal({ onClose }: Props) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden"
+                className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] overflow-y-auto overscroll-contain"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
                     <h2 className="text-base font-bold text-gray-900">Profile</h2>
                     <button
                         onClick={onClose}

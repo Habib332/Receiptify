@@ -40,7 +40,7 @@ export default function JoinBusinessModal({
                             type="button"
                             onClick={() => setRequestedRole(role)}
                             disabled={loading}
-                            className={`flex-1 text-sm font-medium rounded-lg py-2 capitalize transition-colors disabled:opacity-50 ${
+                            className={`flex-1 min-h-[44px] text-sm font-medium rounded-lg capitalize transition-colors disabled:opacity-50 ${
                                 requestedRole === role
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -55,14 +55,14 @@ export default function JoinBusinessModal({
                     <button
                         onClick={onClose}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+                        className="flex-1 min-h-[44px] rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => onConfirm(requestedRole)}
                         disabled={loading}
-                        className="flex-1 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="flex-1 min-h-[44px] rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                         {loading && (
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
