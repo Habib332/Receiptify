@@ -10,6 +10,8 @@ import {
     StyleSheet,
     Linking,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Feather } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../../../App'
@@ -76,112 +78,130 @@ export default function SignIn() {
     }
 
     return (
-        <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
-            <View style={styles.illustrationWrap}>
-                <Image source={illustration} style={styles.illustration} resizeMode="cover" />
-            </View>
-
-            <View style={styles.formWrap}>
-                <View style={styles.logoWrap}>
-                    <ReceiptLogo size={48} />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+            <ScrollView
+                contentContainerStyle={styles.screen}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.illustrationWrap}>
+                    <Image source={illustration} style={styles.illustration} resizeMode="cover" />
                 </View>
 
-                <Text style={styles.heading}>Sign in</Text>
-                <Text style={styles.subheading}>Sign in with Open account</Text>
-
-                {/* Social login */}
-                <View style={styles.socialRow}>
-                    <TouchableOpacity
-                        style={styles.socialButton}
-                        onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google`)}
-                    >
-                        <GoogleLogo />
-                        <Text style={styles.socialButtonText}>Google</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.socialButton}>
-                        <AppleLogo />
-                        <Text style={styles.socialButtonText}>Apple ID</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>Or continue with email address</Text>
-                    <View style={styles.dividerLine} />
-                </View>
-
-                {!!error && (
-                    <View style={styles.errorBox}>
-                        <Text style={styles.errorText}>{error}</Text>
+                <View style={styles.formWrap}>
+                    <View style={styles.logoWrap}>
+                        <ReceiptLogo size={44} />
                     </View>
-                )}
 
-                <View style={styles.inputRow}>
-                    <TextInput
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="Email address"
-                        placeholderTextColor="#9CA3AF"
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        style={styles.input}
-                    />
-                </View>
+                    <Text style={styles.heading}>Sign in</Text>
+                    <Text style={styles.subheading}>Sign in with Open account</Text>
 
-                <View style={styles.inputRow}>
-                    <TextInput
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="Password"
-                        placeholderTextColor="#9CA3AF"
-                        secureTextEntry
-                        style={styles.input}
-                    />
-                </View>
+                    {/* Social login */}
+                    <View style={styles.socialRow}>
+                        <TouchableOpacity
+                            style={styles.socialButton}
+                            activeOpacity={0.7}
+                            onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google`)}
+                        >
+                            <GoogleLogo />
+                            <Text style={styles.socialButtonText}>Google</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+                            <AppleLogo />
+                            <Text style={styles.socialButtonText}>Apple ID</Text>
+                        </TouchableOpacity>
+                    </View>
 
-                <TouchableOpacity
-                    onPress={handleSubmit}
-                    disabled={loading}
-                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.submitButtonText}>Start tracking</Text>
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>Or continue with email</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    {!!error && (
+                        <View style={styles.errorBox}>
+                            <Feather name="alert-circle" size={14} color="#DC2626" />
+                            <Text style={styles.errorText}>{error}</Text>
+                        </View>
                     )}
-                </TouchableOpacity>
 
-                <View style={styles.bottomRow}>
-                    <Text style={styles.bottomText}>Don't have an account? </Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-                        <Text style={styles.link}>Sign up</Text>
-                    </TouchableOpacity>
-                </View>
+                    <View style={styles.inputRow}>
+                        <Feather name="mail" size={16} color="#9CA3AF" style={styles.inputIcon} />
+                        <TextInput
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="Email address"
+                            placeholderTextColor="#9CA3AF"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoComplete="email"
+                            style={styles.input}
+                        />
+                    </View>
 
-                <View style={styles.forgotRow}>
-                    <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-                        <Text style={styles.link}>Forgot password?</Text>
+                    <View style={styles.inputRow}>
+                        <Feather name="lock" size={16} color="#9CA3AF" style={styles.inputIcon} />
+                        <TextInput
+                            value={password}
+                            onChangeText={setPassword}
+                            placeholder="Password"
+                            placeholderTextColor="#9CA3AF"
+                            secureTextEntry
+                            autoComplete="password"
+                            style={styles.input}
+                        />
+                    </View>
+
+                    <View style={styles.forgotRow}>
+                        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} hitSlop={8}>
+                            <Text style={styles.link}>Forgot password?</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={loading}
+                        activeOpacity={0.85}
+                        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.submitButtonText}>Start tracking</Text>
+                        )}
                     </TouchableOpacity>
+
+                    <View style={styles.bottomRow}>
+                        <Text style={styles.bottomText}>Don't have an account? </Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')} hitSlop={8}>
+                            <Text style={styles.link}>Sign up</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-        </ScrollView>
+            </ScrollView>
+        </SafeAreaView>
     )
 }
 
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#fff',
+    },
     screen: {
         flexGrow: 1,
         backgroundColor: '#fff',
-        padding: 16,
-        paddingVertical: 24,
+        paddingTop: 0,
+        paddingBottom: 24,
     },
     illustrationWrap: {
         width: '100%',
-        height: 200,
+        aspectRatio: 532 / 832,
+        maxHeight: 380,
         backgroundColor: '#F3F4F6',
-        borderRadius: 16,
+        borderRadius: 20,
         overflow: 'hidden',
-        marginBottom: 24,
+        marginBottom: 20,
     },
     illustration: {
         width: '100%',
@@ -191,11 +211,12 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 384,
         alignSelf: 'center',
+        paddingHorizontal: 20,
     },
-    logoWrap: { marginBottom: 20 },
-    heading: { fontSize: 24, fontWeight: '700', color: '#111827' },
-    subheading: { fontSize: 12, color: '#6B7280', marginTop: 8, marginBottom: 20 },
-    socialRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    logoWrap: { marginBottom: 14 },
+    heading: { fontSize: 24, fontWeight: '700', color: '#111827', letterSpacing: -0.3 },
+    subheading: { fontSize: 13, color: '#6B7280', marginTop: 4, marginBottom: 20 },
+    socialRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
     socialButton: {
         flex: 1,
         flexDirection: 'row',
@@ -204,46 +225,58 @@ const styles = StyleSheet.create({
         gap: 8,
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        borderRadius: 8,
-        minHeight: 44,
+        borderRadius: 10,
+        minHeight: 46,
+        backgroundColor: '#fff',
     },
-    socialButtonText: { fontSize: 12, fontWeight: '500', color: '#374151' },
-    dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+    socialButtonText: { fontSize: 13, fontWeight: '500', color: '#374151' },
+    dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
     dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
-    dividerText: { fontSize: 11, color: '#9CA3AF' },
+    dividerText: { fontSize: 11.5, color: '#9CA3AF' },
     errorBox: {
-        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 14,
         backgroundColor: '#FEF2F2',
         borderWidth: 1,
-        borderColor: '#FEE2E2',
-        borderRadius: 8,
+        borderColor: '#FECACA',
+        borderRadius: 10,
         paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingVertical: 10,
     },
-    errorText: { fontSize: 12, color: '#DC2626' },
+    errorText: { fontSize: 12.5, color: '#DC2626', flexShrink: 1 },
     inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F3F4F6',
-        borderRadius: 8,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 10,
         paddingHorizontal: 12,
-        minHeight: 44,
-        marginBottom: 10,
+        minHeight: 48,
+        marginBottom: 12,
     },
-    input: { flex: 1, fontSize: 13, color: '#374151' },
+    inputIcon: { marginRight: 8 },
+    input: { flex: 1, fontSize: 14, color: '#111827' },
     submitButton: {
         width: '100%',
         backgroundColor: '#2563EB',
-        borderRadius: 8,
-        minHeight: 44,
+        borderRadius: 10,
+        minHeight: 48,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 8,
+        marginTop: 4,
+        shadowColor: '#2563EB',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 2,
     },
-    submitButtonDisabled: { backgroundColor: '#93C5FD' },
-    submitButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-    bottomRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
-    bottomText: { fontSize: 12, color: '#6B7280' },
-    link: { fontSize: 12, color: '#2563EB', fontWeight: '500' },
-    forgotRow: { alignItems: 'flex-end', marginTop: 4 },
+    submitButtonDisabled: { backgroundColor: '#93C5FD', shadowOpacity: 0 },
+    submitButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    bottomRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
+    bottomText: { fontSize: 13, color: '#6B7280' },
+    link: { fontSize: 13, color: '#2563EB', fontWeight: '500' },
+    forgotRow: { alignItems: 'flex-end', marginTop: 2, marginBottom: 16 },
 })

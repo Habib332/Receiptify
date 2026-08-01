@@ -1,5 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
+import { SafeAreaProvider } from 'react-native-safe-area-context' 
+import { SystemBars } from 'react-native-edge-to-edge'
 
 import SignIn from './src/pages/auth/SignIn'
 import SignUp from './src/pages/auth/SignUp'
@@ -39,6 +41,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
 
 export default function App() {
     return (
+        <SafeAreaProvider>
+                   <SystemBars style="dark" />
         <NavigationContainer>
             <Stack.Navigator
                 initialRouteName="SignIn"
@@ -59,5 +63,6 @@ export default function App() {
                 <Stack.Screen name="AboutReceiptify" component={AboutReceiptifyPage} />
             </Stack.Navigator>
         </NavigationContainer>
+        </SafeAreaProvider>
     )
 }
