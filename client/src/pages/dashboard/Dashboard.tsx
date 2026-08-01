@@ -209,6 +209,10 @@ export default function Dashboard() {
     const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null)
     const exportMenuRef = useRef<HTMLDivElement | null>(null)
 
+    // Manual refresh of the receipts table (and stats/this-month data)
+    // via the small refresh icon next to the "Receipts (N)" heading.
+    const [refreshing, setRefreshing] = useState(false)
+
     // Notifications: owners/managers get notified when someone joins their
     // business. Bell icon opens a modal listing them; badge shows unread count.
     const [showNotifications, setShowNotifications] = useState(false)
@@ -501,6 +505,20 @@ export default function Dashboard() {
             await Promise.all([fetchStats(), fetchAllReceipts(), fetchReceipts()])
         }
     }, [selectedBusinessId, fetchAllBusinessesData, fetchStats, fetchAllReceipts, fetchReceipts])
+
+    // Manual refresh handler — used by the small refresh icon next to the
+    // "Receipts (N)" heading. Re-runs the same fetch(es) as
+    // refreshForCurrentSelection, guarded so rapid repeat clicks don't
+    // stack up overlapping requests.
+    const handleManualRefresh = useCallback(async () => {
+        if (refreshing) return
+        setRefreshing(true)
+        try {
+            await refreshForCurrentSelection()
+        } finally {
+            setRefreshing(false)
+        }
+    }, [refreshing, refreshForCurrentSelection])
 
     useEffect(() => {
         fetchBusinesses()
@@ -1155,9 +1173,31 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                 </div>
             )}
 
-            <h3 className="text-sm font-bold text-gray-900 mb-3">
-                Receipts ({receipts.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-900">
+                    Receipts ({receipts.length})
+                </h3>
+                <button
+                    onClick={handleManualRefresh}
+                    disabled={refreshing || switchingBusiness || loading}
+                    title="Refresh receipts"
+                    className="p-1.5 -m-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    <svg
+                        className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.8}
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                        />
+                    </svg>
+                </button>
+            </div>
 
             {/* Receipts table */}
             <div className="border border-gray-100 rounded-2xl overflow-x-auto overflow-y-visible mb-4">
