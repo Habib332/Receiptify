@@ -13,7 +13,7 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
 import Layout from '../../components/Layout'
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000/api'
 
 async function getToken() {
     return AsyncStorage.getItem('token')

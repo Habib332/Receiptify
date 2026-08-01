@@ -15,7 +15,7 @@ import type { RootStackParamList } from '../../../App'
 import { API_BASE_URL } from '../../api/config'
 import ReceiptLogo from '../../logo/MainLogo'
 
-const illustration = require('../../assets/sign-up.png')
+const illustration = require('../../../assets/sign-up.png')
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>
 

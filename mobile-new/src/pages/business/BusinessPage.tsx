@@ -27,7 +27,7 @@ import Icon from '../../components/Icon'
 import { colors } from '../../theme/colors'
 import { API_BASE_URL, authHeaders, getToken } from '../../api/config'
 
-const BusinessHeroImage = require('../../assets/Business.png')
+const BusinessHeroImage = require('../../../assets/Business.png')
 
 type Business = {
     id: string

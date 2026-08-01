@@ -15,7 +15,7 @@ import Svg, { Path, Circle } from 'react-native-svg'
 import MainLogo from '../logo/MainLogo'
 import UserProfileModal from '../pages/profile/UserProfileModal'
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000/api'
 
 type Props = {
     children: ReactNode

@@ -31,7 +31,7 @@ import {
     Receipt as ReceiptIcon,
     Wallet,
 } from 'lucide-react-native'
-import type { RootStackParamList } from '../../App'
+import type { RootStackParamList } from '../../../App'
 import Layout from '../../components/Layout'
 import DeleteReceiptModal from './DeleteReceiptModal'
 import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal'
@@ -41,7 +41,7 @@ import MiniLineChart from './MiniLineChart'
 import { API_BASE_URL, getToken, setToken, jsonHeaders, authHeaders } from '../../api/config'
 import { Paths } from 'expo-file-system'
 
-const DashboardHeroImage = require('../assets/Dashboard.png')
+const DashboardHeroImage = require('../../../assets/Dashboard.png')
 
 // ---- Types (mirror the receipts.repository.js row shape) — unchanged ----
 type VerificationStatus = 'pending' | 'verified' | 'rejected'
