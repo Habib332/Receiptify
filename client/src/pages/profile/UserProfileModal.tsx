@@ -69,19 +69,16 @@ function formatJoinDate(iso: string) {
 }
 
 /**
- * Stat card with a hover-to-reveal dropdown listing the underlying
- * businesses. Reused for Owner / Manager & Staff / Receipts Submitted so
- * the three cards stay visually and behaviorally consistent.
+ * Simple stat card — icon, label, value, and sub-label.
+ * No hover/click dropdown; purely a static display.
  */
-function HoverStatCard({
+function StatCard({
     icon,
     bg,
     color,
     label,
     value,
     sub,
-    items,
-    emptyLabel,
 }: {
     icon: React.ReactNode
     bg: string
@@ -89,65 +86,15 @@ function HoverStatCard({
     label: string
     value: number
     sub: string
-    items: { key: number; name: string; meta: string }[]
-    emptyLabel: string
 }) {
-    const [open, setOpen] = useState(false)
-
     return (
-        <div
-            className="relative border border-gray-100 rounded-2xl p-4 cursor-pointer select-none"
-            onMouseEnter={() => setOpen(true)}
-            onMouseLeave={() => setOpen(false)}
-            onClick={() => setOpen((prev) => !prev)}
-            role="button"
-            tabIndex={0}
-            aria-expanded={open}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setOpen((prev) => !prev)
-                }
-            }}
-        >
-            <div className="flex items-start justify-between">
-                <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-4`}>
-                    {icon}
-                </div>
-                <svg
-                    className={`w-4 h-4 text-gray-300 transition-transform mt-1 ${open ? 'rotate-180' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
+        <div className="border border-gray-100 rounded-2xl p-4">
+            <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-4`}>
+                {icon}
             </div>
             <p className="text-xs text-gray-400 mb-1">{label}</p>
             <p className="text-xl font-bold text-gray-900">{value}</p>
             <p className="text-xs text-gray-400 mt-1">{sub}</p>
-
-            {open && (
-                <div
-                    className="absolute left-0 top-full mt-2 w-full sm:w-72 bg-white border border-gray-100 rounded-xl shadow-lg z-20 py-2 max-h-64 overflow-y-auto"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {items.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-gray-400">{emptyLabel}</p>
-                    ) : (
-                        items.map((item) => (
-                            <div
-                                key={item.key}
-                                className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-gray-50"
-                            >
-                                <span className="text-xs font-medium text-gray-700 truncate">{item.name}</span>
-                                <span className="text-[10px] text-gray-400 shrink-0">{item.meta}</span>
-                            </div>
-                        ))
-                    )}
-                </div>
-            )}
         </div>
     )
 }
@@ -188,9 +135,12 @@ export default function UserProfileModal({ onClose }: Props) {
         }
     }, [])
 
-    const managerAndStaff = data
-        ? [...data.businesses.manager, ...data.businesses.staff]
-        : []
+    function handleLogout() {
+        sessionStorage.removeItem('token')
+        // clear any other session state stored alongside the token
+        sessionStorage.clear()
+        window.location.href = '/sign-in' // adjust to your actual sign-in route
+    }
 
     return (
         <div
@@ -198,11 +148,11 @@ export default function UserProfileModal({ onClose }: Props) {
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[85vh] overflow-y-auto overscroll-contain"
+                className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+                <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-gray-100">
                     <h2 className="text-base font-bold text-gray-900">Profile</h2>
                     <button
                         onClick={onClose}
@@ -243,18 +193,28 @@ export default function UserProfileModal({ onClose }: Props) {
                                     </span>
                                 )}
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-sm font-bold text-gray-900 truncate">{data.user.name}</p>
                                 <p className="text-xs text-gray-400 truncate">{data.user.email}</p>
                                 <p className="text-[11px] text-gray-400 mt-0.5">
                                     Joined {formatJoinDate(data.user.created_at)}
                                 </p>
                             </div>
+                            <button
+                                onClick={handleLogout}
+                                className="ml-auto text-xs text-white bg-red-500 hover:bg-red-600 font-semibold shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors"
+                                title="Log out"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l3 3m0 0l-3 3m3-3H3" />
+                                </svg>
+                                Logout
+                            </button>
                         </div>
 
                         {/* Stat cards */}
                         <div className="grid grid-cols-1 gap-3">
-                            <HoverStatCard
+                            <StatCard
                                 label="Businesses Owned"
                                 value={data.businesses.owner_count}
                                 sub={data.businesses.owner_count === 1 ? 'business' : 'businesses'}
@@ -265,15 +225,9 @@ export default function UserProfileModal({ onClose }: Props) {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
                                     </svg>
                                 }
-                                items={data.businesses.owner.map((b) => ({
-                                    key: b.business_id,
-                                    name: b.name,
-                                    meta: `${b.receipts_count} receipts`,
-                                }))}
-                                emptyLabel="Not an owner of any business yet."
                             />
 
-                            <HoverStatCard
+                            <StatCard
                                 label="Manager / Staff Roles"
                                 value={data.businesses.manager_count + data.businesses.staff_count}
                                 sub={`${data.businesses.manager_count} manager · ${data.businesses.staff_count} staff`}
@@ -284,15 +238,9 @@ export default function UserProfileModal({ onClose }: Props) {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                                     </svg>
                                 }
-                                items={managerAndStaff.map((b) => ({
-                                    key: b.business_id,
-                                    name: b.name,
-                                    meta: b.receipts_count + ' receipts',
-                                }))}
-                                emptyLabel="Not a manager or staff member anywhere yet."
                             />
 
-                            <HoverStatCard
+                            <StatCard
                                 label="Receipts Submitted"
                                 value={data.receipts.submitted_total}
                                 sub="across all businesses"
@@ -303,12 +251,6 @@ export default function UserProfileModal({ onClose }: Props) {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z" />
                                     </svg>
                                 }
-                                items={data.receipts.by_business.map((b) => ({
-                                    key: b.business_id,
-                                    name: b.name,
-                                    meta: `${b.receipts_count} receipts`,
-                                }))}
-                                emptyLabel="No receipts submitted yet."
                             />
                         </div>
                     </div>
