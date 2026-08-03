@@ -9,6 +9,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     Linking,
+    Dimensions,
+    StatusBar,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
@@ -23,6 +25,15 @@ import AppleLogo from '../../logo/AppleLogo'
 // Same illustration asset used on web — update the path to wherever you
 // copy your assets into the mobile project (e.g. src/assets/sign-in.png).
 const illustration = require('../../../assets/sign-in.png')
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+
+// The illustration's real dimensions (460x722, already sharp-cornered) —
+// used so the hero container matches its exact aspect ratio and shows the
+// full artwork with zero crop.
+const IMAGE_ASPECT_RATIO = 460 / 722
+const HERO_TOP_OFFSET = 0
+const HERO_HEIGHT = SCREEN_WIDTH / IMAGE_ASPECT_RATIO
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'SignIn'>
 
@@ -78,22 +89,26 @@ export default function SignIn() {
     }
 
     return (
-        <SafeAreaView style={styles.safeArea} edges={['top']}>
-            <ScrollView
-                contentContainerStyle={styles.screen}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-            >
-                <View style={styles.illustrationWrap}>
-                    <Image source={illustration} style={styles.illustration} resizeMode="cover" />
-                </View>
+        <View style={styles.root}>
+            <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-                <View style={styles.formWrap}>
-                    <View style={styles.logoWrap}>
-                        <ReceiptLogo size={44} />
-                    </View>
+            <View style={styles.hero}>
+                <Image source={illustration} style={styles.heroImage} resizeMode="cover" />
+            </View>
 
-                    <Text style={styles.heading}>Sign in</Text>
+            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+                <ScrollView
+                    contentContainerStyle={styles.screen}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.sheet}>
+                        <View style={styles.formWrap}>
+                            <View style={styles.logoWrap}>
+                                <ReceiptLogo size={44} />
+                            </View>
+
+                            <Text style={styles.heading}>Sign in</Text>
                     <Text style={styles.subheading}>Sign in with Open account</Text>
 
                     {/* Social login */}
@@ -177,35 +192,42 @@ export default function SignIn() {
                             <Text style={styles.link}>Sign up</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
-            </ScrollView>
-        </SafeAreaView>
+                        </View>
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+        </View>
     )
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
+    root: {
         flex: 1,
-        backgroundColor: '#fff',
-    },
-    screen: {
-        flexGrow: 1,
-        backgroundColor: '#fff',
-        paddingTop: 0,
-        paddingBottom: 24,
-    },
-    illustrationWrap: {
-        width: '100%',
-        aspectRatio: 532 / 832,
-        maxHeight: 380,
         backgroundColor: '#F3F4F6',
-        borderRadius: 20,
-        overflow: 'hidden',
-        marginBottom: 20,
     },
-    illustration: {
+    hero: {
+        position: 'absolute',
+        top: HERO_TOP_OFFSET,
+        left: 0,
+        right: 0,
+        height: HERO_HEIGHT,
+        backgroundColor: '#F3F4F6',
+        overflow: 'hidden',
+    },
+    heroImage: {
         width: '100%',
         height: '100%',
+    },
+    safeArea: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    screen: {},
+    sheet: {
+        marginTop: HERO_TOP_OFFSET + HERO_HEIGHT,
+        backgroundColor: '#fff',
+        paddingTop: 24,
+        paddingBottom: 24,
     },
     formWrap: {
         width: '100%',
