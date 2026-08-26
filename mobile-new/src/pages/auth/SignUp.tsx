@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
     View,
     Text,
@@ -11,8 +11,11 @@ import {
     Linking,
     Dimensions,
     StatusBar,
+    KeyboardAvoidingView,
+    Keyboard,
+    Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -37,11 +40,30 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'SignUp'>
 
 export default function SignUp() {
     const navigation = useNavigation<Nav>()
+    const insets = useSafeAreaInsets()
 
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+
+    // Hides the hero illustration entirely while the keyboard is open, so
+    // the form gets that screen space back instead of the image just being
+    // covered/overlapped.
+    const [keyboardVisible, setKeyboardVisible] = useState(false)
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+
+        const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true))
+        const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
+
+        return () => {
+            showSub.remove()
+            hideSub.remove()
+        }
+    }, [])
 
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -96,18 +118,31 @@ export default function SignUp() {
         <View style={styles.root}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-            <View style={styles.hero}>
-                <Image source={illustration} style={styles.heroImage} resizeMode="cover" />
-            </View>
+            {!keyboardVisible && (
+                <View style={styles.hero}>
+                    <Image source={illustration} style={styles.heroImage} resizeMode="cover" />
+                </View>
+            )}
 
-            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
-                <ScrollView
-                    contentContainerStyle={styles.screen}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+            <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+                      <KeyboardAvoidingView
+                    style={styles.flex}
+                    behavior="padding"
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
                 >
-                    <View style={styles.sheet}>
-                        <View style={styles.formWrap}>
+                    <ScrollView
+                        contentContainerStyle={styles.screen}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <View
+                            style={[
+                                styles.sheet,
+                                keyboardVisible && styles.sheetKeyboardOpen,
+                                { paddingBottom: 24 + insets.bottom },
+                            ]}
+                        >
+                            <View style={styles.formWrap}>
                             <View style={styles.logoWrap}>
                                 <ReceiptLogo size={44} />
                             </View>
@@ -216,7 +251,8 @@ export default function SignUp() {
                             </View>
                         </View>
                     </View>
-                </ScrollView>
+                    </ScrollView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </View>
     )
@@ -226,6 +262,9 @@ const styles = StyleSheet.create({
     root: {
         flex: 1,
         backgroundColor: '#F3F4F6',
+    },
+    flex: {
+        flex: 1,
     },
     hero: {
         position: 'absolute',
@@ -250,6 +289,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         paddingTop: 24,
         paddingBottom: 24,
+    },
+    sheetKeyboardOpen: {
+        marginTop: 0,
     },
     formWrap: {
         width: '100%',

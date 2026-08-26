@@ -2,6 +2,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { SafeAreaProvider } from 'react-native-safe-area-context' 
 import { SystemBars } from 'react-native-edge-to-edge'
+import { View } from 'react-native'
 
 import SignIn from './src/pages/auth/SignIn'
 import SignUp from './src/pages/auth/SignUp'
@@ -42,27 +43,29 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
 export default function App() {
     return (
         <SafeAreaProvider>
-                   <SystemBars style="dark" />
-        <NavigationContainer>
-            <Stack.Navigator
-                initialRouteName="SignIn"
-                screenOptions={{ headerShown: false }}
-            >
-                <Stack.Screen name="SignIn" component={SignIn} />
-                <Stack.Screen name="SignUp" component={SignUp} />
-                <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
-                <Stack.Screen name="ResetPassword" component={ResetPassword} />
-                <Stack.Screen name="AuthCallback" component={AuthCallback} />
-                <Stack.Screen name="ScanUpload" component={ScanUpload} />
-                <Stack.Screen name="ScanBulkUpload" component={ScanBulkUpload} />
-                <Stack.Screen name="ScanReview" component={ScanReview} />
-                <Stack.Screen name="ScanBulkReview" component={ScanBulkReview} />
-                <Stack.Screen name="SelectBusiness" component={BusinessPage} />
-                <Stack.Screen name="Dashboard" component={Dashboard} />
-                <Stack.Screen name="AboutTheCreators" component={AboutTheCreatorsPage} />
-                <Stack.Screen name="AboutReceiptify" component={AboutReceiptifyPage} />
-            </Stack.Navigator>
-        </NavigationContainer>
+            <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+                <SystemBars style="dark" />
+                <NavigationContainer>
+                    <Stack.Navigator
+                        initialRouteName="SignIn"
+                        screenOptions={{ headerShown: false }}
+                    >
+                        <Stack.Screen name="SignIn" component={SignIn} />
+                        <Stack.Screen name="SignUp" component={SignUp} />
+                        <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+                        <Stack.Screen name="ResetPassword" component={ResetPassword} />
+                        <Stack.Screen name="AuthCallback" component={AuthCallback} />
+                        <Stack.Screen name="ScanUpload" component={ScanUpload} />
+                        <Stack.Screen name="ScanBulkUpload" component={ScanBulkUpload} />
+                        <Stack.Screen name="ScanReview" component={ScanReview} />
+                        <Stack.Screen name="ScanBulkReview" component={ScanBulkReview} />
+                        <Stack.Screen name="SelectBusiness" component={BusinessPage} />
+                        <Stack.Screen name="Dashboard" component={Dashboard} />
+                        <Stack.Screen name="AboutTheCreators" component={AboutTheCreatorsPage} />
+                        <Stack.Screen name="AboutReceiptify" component={AboutReceiptifyPage} />
+                    </Stack.Navigator>
+                </NavigationContainer>
+            </View>
         </SafeAreaProvider>
     )
 }

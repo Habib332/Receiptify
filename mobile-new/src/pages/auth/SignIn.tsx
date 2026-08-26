@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
     View,
     Text,
@@ -11,9 +11,13 @@ import {
     Linking,
     Dimensions,
     StatusBar,
+    KeyboardAvoidingView,
+    Keyboard,
+    Platform,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Feather } from '@expo/vector-icons'
+import { BlurView } from 'expo-blur'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../../../App'
@@ -22,29 +26,41 @@ import ReceiptLogo from '../../logo/MainLogo'
 import GoogleLogo from '../../logo/GoogleLogo'
 import AppleLogo from '../../logo/AppleLogo'
 
-// Same illustration asset used on web — update the path to wherever you
-// copy your assets into the mobile project (e.g. src/assets/sign-in.png).
 const illustration = require('../../../assets/sign-in.png')
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
-// The illustration's real dimensions (460x722, already sharp-cornered) —
-// used so the hero container matches its exact aspect ratio and shows the
-// full artwork with zero crop.
 const IMAGE_ASPECT_RATIO = 460 / 722
 const HERO_TOP_OFFSET = 0
 const HERO_HEIGHT = SCREEN_WIDTH / IMAGE_ASPECT_RATIO
+const SHEET_RADIUS = 28
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'SignIn'>
 
 export default function SignIn() {
     const navigation = useNavigation<Nav>()
+    const insets = useSafeAreaInsets()
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
 
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+
+    const [keyboardVisible, setKeyboardVisible] = useState(false)
+
+    useEffect(() => {
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+
+        const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true))
+        const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
+
+        return () => {
+            showSub.remove()
+            hideSub.remove()
+        }
+    }, [])
 
     const handleSubmit = async () => {
         setError('')
@@ -57,7 +73,6 @@ export default function SignIn() {
         setLoading(true)
 
         try {
-            console.log("API URL:", `${API_BASE_URL}/auth/login`);
             const res = await fetch(`${API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -92,109 +107,133 @@ export default function SignIn() {
         <View style={styles.root}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-            <View style={styles.hero}>
+            {/* Hero stays mounted always now — we blur it instead of unmounting it */}
+            <View
+                style={[
+                    styles.hero,
+                    keyboardVisible && styles.heroKeyboardOpen,
+                ]}
+            >
                 <Image source={illustration} style={styles.heroImage} resizeMode="cover" />
+                {keyboardVisible && (
+                    <BlurView
+                        intensity={40}
+                        tint="light"
+                        style={StyleSheet.absoluteFill}
+                    />
+                )}
             </View>
 
-            <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
-                <ScrollView
-                    contentContainerStyle={styles.screen}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={false}
+            <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+                <KeyboardAvoidingView
+                    style={styles.flex}
+                    behavior="padding"
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
                 >
-                    <View style={styles.sheet}>
-                        <View style={styles.formWrap}>
-                            <View style={styles.logoWrap}>
-                                <ReceiptLogo size={44} />
-                            </View>
-
-                            <Text style={styles.heading}>Sign in</Text>
-                    <Text style={styles.subheading}>Sign in with Open account</Text>
-
-                    {/* Social login */}
-                    <View style={styles.socialRow}>
-                        <TouchableOpacity
-                            style={styles.socialButton}
-                            activeOpacity={0.7}
-                            onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google`)}
-                        >
-                            <GoogleLogo />
-                            <Text style={styles.socialButtonText}>Google</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-                            <AppleLogo />
-                            <Text style={styles.socialButtonText}>Apple ID</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.dividerRow}>
-                        <View style={styles.dividerLine} />
-                        <Text style={styles.dividerText}>Or continue with email</Text>
-                        <View style={styles.dividerLine} />
-                    </View>
-
-                    {!!error && (
-                        <View style={styles.errorBox}>
-                            <Feather name="alert-circle" size={14} color="#DC2626" />
-                            <Text style={styles.errorText}>{error}</Text>
-                        </View>
-                    )}
-
-                    <View style={styles.inputRow}>
-                        <Feather name="mail" size={16} color="#9CA3AF" style={styles.inputIcon} />
-                        <TextInput
-                            value={email}
-                            onChangeText={setEmail}
-                            placeholder="Email address"
-                            placeholderTextColor="#9CA3AF"
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            style={styles.input}
-                        />
-                    </View>
-
-                    <View style={styles.inputRow}>
-                        <Feather name="lock" size={16} color="#9CA3AF" style={styles.inputIcon} />
-                        <TextInput
-                            value={password}
-                            onChangeText={setPassword}
-                            placeholder="Password"
-                            placeholderTextColor="#9CA3AF"
-                            secureTextEntry
-                            autoComplete="password"
-                            style={styles.input}
-                        />
-                    </View>
-
-                    <View style={styles.forgotRow}>
-                        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} hitSlop={8}>
-                            <Text style={styles.link}>Forgot password?</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                        onPress={handleSubmit}
-                        disabled={loading}
-                        activeOpacity={0.85}
-                        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                    <ScrollView
+                        contentContainerStyle={styles.screen}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
                     >
-                        {loading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.submitButtonText}>Start tracking</Text>
-                        )}
-                    </TouchableOpacity>
+                        <View
+                            style={[
+                                styles.sheet,
+                                keyboardVisible && styles.sheetKeyboardOpen,
+                                { paddingBottom: 24 + insets.bottom },
+                            ]}
+                        >
+                            <View style={styles.formWrap}>
+                                <View style={styles.logoWrap}>
+                                    <ReceiptLogo size={44} />
+                                </View>
 
-                    <View style={styles.bottomRow}>
-                        <Text style={styles.bottomText}>Don't have an account? </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('SignUp')} hitSlop={8}>
-                            <Text style={styles.link}>Sign up</Text>
-                        </TouchableOpacity>
-                    </View>
+                                <Text style={styles.heading}>Sign in</Text>
+                                <Text style={styles.subheading}>Sign in with Open account</Text>
+
+                                <View style={styles.socialRow}>
+                                    <TouchableOpacity
+                                        style={styles.socialButton}
+                                        activeOpacity={0.7}
+                                        onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google`)}
+                                    >
+                                        <GoogleLogo />
+                                        <Text style={styles.socialButtonText}>Google</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
+                                        <AppleLogo />
+                                        <Text style={styles.socialButtonText}>Apple ID</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.dividerRow}>
+                                    <View style={styles.dividerLine} />
+                                    <Text style={styles.dividerText}>Or continue with email</Text>
+                                    <View style={styles.dividerLine} />
+                                </View>
+
+                                {!!error && (
+                                    <View style={styles.errorBox}>
+                                        <Feather name="alert-circle" size={14} color="#DC2626" />
+                                        <Text style={styles.errorText}>{error}</Text>
+                                    </View>
+                                )}
+
+                                <View style={styles.inputRow}>
+                                    <Feather name="mail" size={16} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        placeholder="Email address"
+                                        placeholderTextColor="#9CA3AF"
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
+                                        autoComplete="email"
+                                        style={styles.input}
+                                    />
+                                </View>
+
+                                <View style={styles.inputRow}>
+                                    <Feather name="lock" size={16} color="#9CA3AF" style={styles.inputIcon} />
+                                    <TextInput
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        placeholder="Password"
+                                        placeholderTextColor="#9CA3AF"
+                                        secureTextEntry
+                                        autoComplete="password"
+                                        style={styles.input}
+                                    />
+                                </View>
+
+                                <View style={styles.forgotRow}>
+                                    <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} hitSlop={8}>
+                                        <Text style={styles.link}>Forgot password?</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <TouchableOpacity
+                                    onPress={handleSubmit}
+                                    disabled={loading}
+                                    activeOpacity={0.85}
+                                    style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color="#fff" />
+                                    ) : (
+                                        <Text style={styles.submitButtonText}>Start tracking</Text>
+                                    )}
+                                </TouchableOpacity>
+
+                                <View style={styles.bottomRow}>
+                                    <Text style={styles.bottomText}>Don't have an account? </Text>
+                                    <TouchableOpacity onPress={() => navigation.navigate('SignUp')} hitSlop={8}>
+                                        <Text style={styles.link}>Sign up</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
                         </View>
-                    </View>
-                </ScrollView>
+                    </ScrollView>
+                </KeyboardAvoidingView>
             </SafeAreaView>
         </View>
     )
@@ -203,7 +242,10 @@ export default function SignIn() {
 const styles = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: '#F3F4F6',
+        backgroundColor: '#fff',
+    },
+    flex: {
+        flex: 1,
     },
     hero: {
         position: 'absolute',
@@ -213,6 +255,11 @@ const styles = StyleSheet.create({
         height: HERO_HEIGHT,
         backgroundColor: '#F3F4F6',
         overflow: 'hidden',
+    },
+    heroKeyboardOpen: {
+        // Shrinks the hero to a slim strip behind the sheet when keyboard is open,
+        // rather than fully hiding it — gives the blurred peek-through effect.
+        height: 140,
     },
     heroImage: {
         width: '100%',
@@ -226,8 +273,14 @@ const styles = StyleSheet.create({
     sheet: {
         marginTop: HERO_TOP_OFFSET + HERO_HEIGHT,
         backgroundColor: '#fff',
+        borderTopLeftRadius: SHEET_RADIUS,
+        borderTopRightRadius: SHEET_RADIUS,
         paddingTop: 24,
         paddingBottom: 24,
+        overflow: 'hidden',
+    },
+    sheetKeyboardOpen: {
+        marginTop: 140,
     },
     formWrap: {
         width: '100%',
