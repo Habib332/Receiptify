@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-    Modal,
     View,
     Text,
     Image,
@@ -49,7 +48,10 @@ type ProfileData = {
 }
 
 type Props = {
-    onClose: () => void
+    /** Optional: pass this if the component is rendered inside something
+     *  dismissible (a sheet, a screen with a back action, etc). If omitted,
+     *  no close button is rendered. */
+    onClose?: () => void
 }
 
 function getInitials(name: string) {
@@ -127,7 +129,7 @@ function ExpandableStatCard({
     )
 }
 
-export default function UserProfileModal({ onClose }: Props) {
+export default function UserProfile({ onClose }: Props) {
     const [data, setData] = useState<ProfileData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -166,114 +168,103 @@ export default function UserProfileModal({ onClose }: Props) {
     const managerAndStaff = data ? [...data.businesses.manager, ...data.businesses.staff] : []
 
     return (
-        <Modal transparent animationType="fade" visible onRequestClose={onClose}>
-            <View style={styles.overlay}>
-                <View style={styles.card}>
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Profile</Text>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <X size={16} color="#9CA3AF" />
-                        </TouchableOpacity>
+        <View style={styles.card}>
+            <View style={styles.header}>
+                <Text style={styles.headerTitle}>Profile</Text>
+                {onClose && (
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                        <X size={16} color="#9CA3AF" />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {loading && (
+                <View style={styles.loadingWrap}>
+                    <ActivityIndicator color="#9CA3AF" />
+                    <Text style={styles.loadingText}>Loading profile...</Text>
+                </View>
+            )}
+
+            {!loading && error && (
+                <View style={{ padding: 20 }}>
+                    <View style={styles.errorBox}>
+                        <Text style={styles.errorText}>{error}</Text>
+                    </View>
+                </View>
+            )}
+
+            {!loading && !error && data && (
+                <ScrollView contentContainerStyle={styles.body}>
+                    <View style={styles.identityRow}>
+                        <View style={styles.avatar}>
+                            {data.user.avatar_url ? (
+                                <Image source={{ uri: data.user.avatar_url }} style={styles.avatarImg} />
+                            ) : (
+                                <Text style={styles.avatarInitials}>{getInitials(data.user.name)}</Text>
+                            )}
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.userName} numberOfLines={1}>{data.user.name}</Text>
+                            <Text style={styles.userEmail} numberOfLines={1}>{data.user.email}</Text>
+                            <Text style={styles.userJoined}>Joined {formatJoinDate(data.user.created_at)}</Text>
+                        </View>
                     </View>
 
-                    {loading && (
-                        <View style={styles.loadingWrap}>
-                            <ActivityIndicator color="#9CA3AF" />
-                            <Text style={styles.loadingText}>Loading profile...</Text>
-                        </View>
-                    )}
+                    <View style={styles.statsCol}>
+                        <ExpandableStatCard
+                            label="Businesses Owned"
+                            value={data.businesses.owner_count}
+                            sub={data.businesses.owner_count === 1 ? 'business' : 'businesses'}
+                            bg="#EFF6FF"
+                            color="#2563EB"
+                            icon={<Briefcase size={18} color="#2563EB" />}
+                            items={data.businesses.owner.map((b) => ({
+                                key: b.business_id,
+                                name: b.name,
+                                meta: `${b.receipts_count} receipts`,
+                            }))}
+                            emptyLabel="Not an owner of any business yet."
+                        />
 
-                    {!loading && error && (
-                        <View style={{ padding: 20 }}>
-                            <View style={styles.errorBox}>
-                                <Text style={styles.errorText}>{error}</Text>
-                            </View>
-                        </View>
-                    )}
+                        <ExpandableStatCard
+                            label="Manager / Staff Roles"
+                            value={data.businesses.manager_count + data.businesses.staff_count}
+                            sub={`${data.businesses.manager_count} manager · ${data.businesses.staff_count} staff`}
+                            bg="#F5F3FF"
+                            color="#7C3AED"
+                            icon={<Users size={18} color="#7C3AED" />}
+                            items={managerAndStaff.map((b) => ({
+                                key: b.business_id,
+                                name: b.name,
+                                meta: b.receipts_count + ' receipts',
+                            }))}
+                            emptyLabel="Not a manager or staff member anywhere yet."
+                        />
 
-                    {!loading && !error && data && (
-                        <ScrollView contentContainerStyle={styles.body}>
-                            <View style={styles.identityRow}>
-                                <View style={styles.avatar}>
-                                    {data.user.avatar_url ? (
-                                        <Image source={{ uri: data.user.avatar_url }} style={styles.avatarImg} />
-                                    ) : (
-                                        <Text style={styles.avatarInitials}>{getInitials(data.user.name)}</Text>
-                                    )}
-                                </View>
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={styles.userName} numberOfLines={1}>{data.user.name}</Text>
-                                    <Text style={styles.userEmail} numberOfLines={1}>{data.user.email}</Text>
-                                    <Text style={styles.userJoined}>Joined {formatJoinDate(data.user.created_at)}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.statsCol}>
-                                <ExpandableStatCard
-                                    label="Businesses Owned"
-                                    value={data.businesses.owner_count}
-                                    sub={data.businesses.owner_count === 1 ? 'business' : 'businesses'}
-                                    bg="#EFF6FF"
-                                    color="#2563EB"
-                                    icon={<Briefcase size={18} color="#2563EB" />}
-                                    items={data.businesses.owner.map((b) => ({
-                                        key: b.business_id,
-                                        name: b.name,
-                                        meta: `${b.receipts_count} receipts`,
-                                    }))}
-                                    emptyLabel="Not an owner of any business yet."
-                                />
-
-                                <ExpandableStatCard
-                                    label="Manager / Staff Roles"
-                                    value={data.businesses.manager_count + data.businesses.staff_count}
-                                    sub={`${data.businesses.manager_count} manager · ${data.businesses.staff_count} staff`}
-                                    bg="#F5F3FF"
-                                    color="#7C3AED"
-                                    icon={<Users size={18} color="#7C3AED" />}
-                                    items={managerAndStaff.map((b) => ({
-                                        key: b.business_id,
-                                        name: b.name,
-                                        meta: b.receipts_count + ' receipts',
-                                    }))}
-                                    emptyLabel="Not a manager or staff member anywhere yet."
-                                />
-
-                                <ExpandableStatCard
-                                    label="Receipts Submitted"
-                                    value={data.receipts.submitted_total}
-                                    sub="across all businesses"
-                                    bg="#F0FDF4"
-                                    color="#16A34A"
-                                    icon={<ReceiptIcon size={18} color="#16A34A" />}
-                                    items={data.receipts.by_business.map((b) => ({
-                                        key: b.business_id,
-                                        name: b.name,
-                                        meta: `${b.receipts_count} receipts`,
-                                    }))}
-                                    emptyLabel="No receipts submitted yet."
-                                />
-                            </View>
-                        </ScrollView>
-                    )}
-                </View>
-            </View>
-        </Modal>
+                        <ExpandableStatCard
+                            label="Receipts Submitted"
+                            value={data.receipts.submitted_total}
+                            sub="across all businesses"
+                            bg="#F0FDF4"
+                            color="#16A34A"
+                            icon={<ReceiptIcon size={18} color="#16A34A" />}
+                            items={data.receipts.by_business.map((b) => ({
+                                key: b.business_id,
+                                name: b.name,
+                                meta: `${b.receipts_count} receipts`,
+                            }))}
+                            emptyLabel="No receipts submitted yet."
+                        />
+                    </View>
+                </ScrollView>
+            )}
+        </View>
     )
 }
 
 const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 16,
-    },
     card: {
         width: '100%',
-        maxWidth: 420,
-        maxHeight: '85%',
         backgroundColor: '#fff',
         borderRadius: 16,
         overflow: 'hidden',

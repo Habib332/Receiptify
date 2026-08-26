@@ -56,10 +56,8 @@ type DashboardStats = {
 type ViewMode = 'My Businesses' | 'All Businesses'
 
 type RootStackParamList = {
-    Dashboard: { businessId: string }
-    Businesses: undefined
+    MainTabs: { screen: string; params?: { businessId: string } }
 }
-
 // Reads the userId claim out of the JWT payload stored via AsyncStorage.
 // Decode-only (no signature verification) — same trust model as the web
 // app, which already relies on the backend to reject a tampered/expired
@@ -109,7 +107,7 @@ function isPermissionError(status: number, message: string) {
 const screenWidth = Dimensions.get('window').width
 const isWide = screenWidth >= 768
 
-export default function BusinessesPage() {
+export default function BusinessPage() {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
     const [businesses, setBusinesses] = useState<Business[]>([])
     const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -149,9 +147,8 @@ export default function BusinessesPage() {
     const [notificationsLoading, setNotificationsLoading] = useState(false)
 
     const navigateToReceiptsPage = (biz: Business) => {
-        navigation.navigate('Dashboard', { businessId: biz.id })
-    }
-
+    navigation.navigate('MainTabs', { screen: 'Dashboard', params: { businessId: biz.id } })
+}
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
         setError('')
