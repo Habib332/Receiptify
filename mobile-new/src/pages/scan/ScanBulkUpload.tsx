@@ -7,6 +7,7 @@ import {
     StyleSheet,
     ActivityIndicator,
     FlatList,
+    ScrollView,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
@@ -250,6 +251,7 @@ export default function ScanBulkUpload() {
 
     return (
         <Layout>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <Text style={styles.title}>Bulk upload receipts</Text>
                 <Text style={styles.subtitle}>
@@ -389,11 +391,17 @@ export default function ScanBulkUpload() {
                     </TouchableOpacity>
                 </View>
             )}
+            </ScrollView>
         </Layout>
     )
 }
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    
     header: {
         marginBottom: 24,
     },

@@ -14,6 +14,7 @@ import ScanReview from './src/pages/scan/ScanReview'
 import ScanBulkReview from './src/pages/scan/ScanBulkReview'
 import AboutReceiptifyPage from './src/pages/aboutTheReceiptify/AboutReceiptifyPage'
 import MainTabs from './src/components/MainTabs'
+import { StackScreen } from 'react-native-screens'
 
 // Screen names below map 1:1 to the web app's route paths (see the
 // comment beside each). Layout.tsx, UploadModeToggle.tsx and

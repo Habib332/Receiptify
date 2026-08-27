@@ -8,6 +8,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    ScrollView,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation, useRoute } from '@react-navigation/native'
@@ -297,6 +298,7 @@ export default function ScanReview() {
 
     return (
         <Layout>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <Text style={styles.title}>Review your receipt</Text>
                 <Text style={styles.subtitle}>Confirm the details we found, or make changes below.</Text>
@@ -516,11 +518,17 @@ export default function ScanReview() {
                     </TouchableOpacity>
                 </View>
             </View>
+            </ScrollView>
         </Layout>
     )
 }
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    
     header: {
         marginBottom: 24,
     },

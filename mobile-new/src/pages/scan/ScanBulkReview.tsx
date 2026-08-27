@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
+    ScrollView,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation, useRoute } from '@react-navigation/native'
@@ -317,6 +318,7 @@ export default function ScanBulkReview() {
 
     return (
         <Layout>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <Text style={styles.title}>Review batch</Text>
                 <Text style={styles.subtitle}>Confirm each receipt's details, or make changes below.</Text>
@@ -544,11 +546,17 @@ export default function ScanBulkReview() {
                     </View>
                 </View>
             </View>
+            </ScrollView>
         </Layout>
     )
 }
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    
     header: {
         marginBottom: 20,
     },
