@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Linking, ScrollView } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import Svg, { Path } from 'react-native-svg'
 import Layout from '../../components/Layout'
@@ -41,6 +41,7 @@ export default function AboutTheCreatorsPage() {
 
     return (
         <Layout>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
                 <Text style={styles.title}>About the Creators</Text>
             </View>
@@ -136,11 +137,16 @@ export default function AboutTheCreatorsPage() {
             {showContactModal && (
                 <ContactModal onClose={() => setShowContactModal(false)} />
             )}
+            </ScrollView>
         </Layout>
     )
 }
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
     header: {
         marginBottom: 24,
     },

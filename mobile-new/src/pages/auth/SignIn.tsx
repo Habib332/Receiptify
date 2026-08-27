@@ -95,7 +95,7 @@ export default function SignIn() {
                 await setStoredUser(user)
             }
 
-            navigation.navigate('SelectBusiness')
+            navigation.navigate('MainTabs', { screen: 'Businesses' })
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         } finally {

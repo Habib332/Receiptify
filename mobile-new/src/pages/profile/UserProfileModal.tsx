@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
     StyleSheet,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { X, ChevronDown, Briefcase, Users, Receipt as ReceiptIcon } from 'lucide-react-native'
 import { API_BASE_URL, authHeaders } from '../../api/config'
 
@@ -130,6 +131,7 @@ function ExpandableStatCard({
 }
 
 export default function UserProfile({ onClose }: Props) {
+    const insets = useSafeAreaInsets()
     const [data, setData] = useState<ProfileData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -168,7 +170,7 @@ export default function UserProfile({ onClose }: Props) {
     const managerAndStaff = data ? [...data.businesses.manager, ...data.businesses.staff] : []
 
     return (
-        <View style={styles.card}>
+        <View style={[styles.card, { paddingTop: insets.top }]}>
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Profile</Text>
                 {onClose && (
@@ -265,6 +267,7 @@ export default function UserProfile({ onClose }: Props) {
 const styles = StyleSheet.create({
     card: {
         width: '100%',
+        flex: 1,
         backgroundColor: '#fff',
         borderRadius: 16,
         overflow: 'hidden',
@@ -292,7 +295,7 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     errorText: { fontSize: 12, color: '#DC2626' },
-    body: { padding: 20 },
+    body: { padding: 20, paddingBottom: 40 },
     identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
     avatar: {
         width: 56,

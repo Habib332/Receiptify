@@ -14,7 +14,7 @@ import ScanReview from './src/pages/scan/ScanReview'
 import ScanBulkReview from './src/pages/scan/ScanBulkReview'
 import AboutReceiptifyPage from './src/pages/aboutTheReceiptify/AboutReceiptifyPage'
 import MainTabs from './src/components/MainTabs'
-import BusinessPage from './src/pages/business/BusinessPage'
+
 // Screen names below map 1:1 to the web app's route paths (see the
 // comment beside each). Layout.tsx, UploadModeToggle.tsx and
 // AboutTheCreatorsPage.tsx navigate using these exact names — keep them
@@ -35,7 +35,6 @@ export type RootStackParamList = {
     ScanReview: { receipt: any } // '/scan/review'
     ScanBulkReview: { receipts: any[] } // '/scan/bulk/review'
     AboutReceiptify: undefined // '/about-receiptify'
-    SelectBusiness: undefined
 }
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
@@ -60,7 +59,6 @@ export default function App() {
                         <Stack.Screen name="ScanReview" component={ScanReview} />
                         <Stack.Screen name="ScanBulkReview" component={ScanBulkReview} />
                         <Stack.Screen name="AboutReceiptify" component={AboutReceiptifyPage} />
-                        <Stack.Screen name="SelectBusiness" component={BusinessPage} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </View>

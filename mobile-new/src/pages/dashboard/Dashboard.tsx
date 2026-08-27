@@ -691,7 +691,7 @@ export default function Dashboard() {
 
     return (
         <Layout>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.headerRow}>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.h1}>Receipts</Text>
@@ -1151,6 +1151,11 @@ const COL = StyleSheet.create({
 })
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 40,
+    },
+    
     headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
     h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
     h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
