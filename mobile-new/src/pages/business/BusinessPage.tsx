@@ -4,7 +4,6 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    Pressable,
     StyleSheet,
     ScrollView,
     Image,
@@ -23,6 +22,7 @@ import NotificationsModal, { type NotificationItem } from './NotificationModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import LeaveBusinessModal from './LeaveBusinessModal'
 import TeamModal from './TeamModel'
+import BusinessDetailsSheet from './BusinessDetailsSheet'
 import Icon from '../../components/Icon'
 import { colors } from '../../theme/colors'
 import { API_BASE_URL, authHeaders, getToken } from '../../api/config'
@@ -127,7 +127,10 @@ export default function BusinessPage() {
     const [leavingBusiness, setLeavingBusiness] = useState<Business | null>(null)
     const [leaveLoading, setLeaveLoading] = useState(false)
     const [viewingTeamBusiness, setViewingTeamBusiness] = useState<Business | null>(null)
-    const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+    // Replaces the old per-row three-dot menu: tapping a row opens this
+    // bottom sheet, which surfaces the business's details (address/phone/
+    // role) plus every action — Receipts, Edit, Team, Leave, Delete, Join.
+    const [detailBusiness, setDetailBusiness] = useState<Business | null>(null)
 
     // Default view is "My Businesses" (only ones the user has a role in).
     // Switching to "All Businesses" reveals ones they could still join.
@@ -147,8 +150,9 @@ export default function BusinessPage() {
     const [notificationsLoading, setNotificationsLoading] = useState(false)
 
     const navigateToReceiptsPage = (biz: Business) => {
-    navigation.navigate('MainTabs', { screen: 'Dashboard', params: { businessId: biz.id } })
-}
+        navigation.navigate('MainTabs', { screen: 'Dashboard', params: { businessId: biz.id } })
+    }
+
     const fetchBusinesses = useCallback(async () => {
         setLoading(true)
         setError('')
@@ -348,7 +352,7 @@ export default function BusinessPage() {
     }
 
     // Leave flow: staff/manager only (never owner — enforced both here via
-    // the menu item being hidden, and should also be enforced server-side).
+    // the sheet hiding the option, and should also be enforced server-side).
     // Hits DELETE /business/:businessId/members/:memberId with the current
     // user's own id, reusing the existing "remove member" endpoint rather
     // than a dedicated /leave route — self-removal is just a member removal
@@ -579,328 +583,208 @@ export default function BusinessPage() {
     return (
         <Layout>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                {/* Close any open row menu when tapping elsewhere on the page —
-                    equivalent to the web version's document click listener. */}
-                <Pressable onPress={() => openMenuId && setOpenMenuId(null)}>
-                    <View style={styles.headerRow}>
-                        <View>
-                            <Text style={styles.pageTitle}>Businesses</Text>
-                            <Text style={styles.pageSubtitle}>Manage all your saved businesses in one place.</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.bellButton}
-                            onPress={() => {
-                                setShowNotifications(true)
-                                fetchNotifications()
-                            }}
-                        >
-                            <Icon
-                                d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
-                                size={20}
-                                color={colors.gray400}
-                                strokeWidth={1.8}
-                            />
-                            {unreadNotificationCount > 0 && (
-                                <View style={styles.badge}>
-                                    <Text style={styles.badgeText}>
-                                        {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                                    </Text>
-                                </View>
-                            )}
+                <View style={styles.headerRow}>
+                    <View>
+                        <Text style={styles.pageTitle}>Businesses</Text>
+                        <Text style={styles.pageSubtitle}>Manage all your saved businesses in one place.</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.bellButton}
+                        onPress={() => {
+                            setShowNotifications(true)
+                            fetchNotifications()
+                        }}
+                    >
+                        <Icon
+                            d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
+                            size={20}
+                            color={colors.gray400}
+                            strokeWidth={1.8}
+                        />
+                        {unreadNotificationCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>
+                                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+                {error !== '' && <Text style={styles.errorBanner}>{error}</Text>}
+
+                {/* Hero banner */}
+                <View style={[styles.hero, isWide && styles.heroWide]}>
+                    <View style={styles.heroText}>
+                        <Text style={styles.heroTitle}>
+                            All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
+                        </Text>
+                        <Text style={styles.heroSubtitle}>
+                            Search, manage, and keep track of all your businesses in one place.
+                        </Text>
+                        <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
+                            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
+                            <Text style={styles.heroButtonText}>Add Business</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {error !== '' && <Text style={styles.errorBanner}>{error}</Text>}
-
-                    {/* Hero banner */}
-                    <View style={[styles.hero, isWide && styles.heroWide]}>
-                        <View style={styles.heroText}>
-                            <Text style={styles.heroTitle}>
-                                All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
-                            </Text>
-                            <Text style={styles.heroSubtitle}>
-                                Search, manage, and keep track of all your businesses in one place.
-                            </Text>
-                            <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
-                                <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
-                                <Text style={styles.heroButtonText}>Add Business</Text>
-                            </TouchableOpacity>
+                    {isWide && (
+                        <View style={styles.heroImageWrap}>
+                            <Image source={BusinessHeroImage} style={styles.heroImage} resizeMode="contain" />
                         </View>
-                        {isWide && (
-                            <View style={styles.heroImageWrap}>
-                                <Image source={BusinessHeroImage} style={styles.heroImage} resizeMode="contain" />
+                    )}
+                </View>
+
+                {/* Overview */}
+                <View style={styles.statsGrid}>
+                    {overviewStats.map((stat) => (
+                        <View key={stat.label} style={[styles.statCard, isWide ? styles.statCardWide : styles.statCardNarrow]}>
+                            <View style={[styles.statIcon, { backgroundColor: stat.bg }]}>
+                                <Icon
+                                    d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25M12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0"
+                                    size={20}
+                                    color={stat.color}
+                                    strokeWidth={1.8}
+                                />
                             </View>
-                        )}
-                    </View>
-
-                    {/* Overview */}
-                    <View style={styles.statsGrid}>
-                        {overviewStats.map((stat) => (
-                            <View key={stat.label} style={[styles.statCard, isWide ? styles.statCardWide : styles.statCardNarrow]}>
-                                <View style={[styles.statIcon, { backgroundColor: stat.bg }]}>
-                                    <Icon
-                                        d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25M12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0"
-                                        size={20}
-                                        color={stat.color}
-                                        strokeWidth={1.8}
-                                    />
-                                </View>
-                                <Text style={styles.statLabel}>{stat.label}</Text>
-                                <Text style={styles.statValue} numberOfLines={1}>{stat.value}</Text>
-                                <Text style={styles.statSub}>{stat.sub}</Text>
-                            </View>
-                        ))}
-                    </View>
-
-                    {/* Search + filter + add */}
-                    <View style={styles.controlsRow}>
-                        <View style={styles.searchBox}>
-                            <Icon d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" size={16} color={colors.gray400} strokeWidth={1.8} />
-                            <TextInput
-                                value={search}
-                                onChangeText={setSearch}
-                                placeholder="Search businesses..."
-                                placeholderTextColor={colors.gray400}
-                                style={styles.searchInput}
-                            />
+                            <Text style={styles.statLabel}>{stat.label}</Text>
+                            <Text style={styles.statValue} numberOfLines={1}>{stat.value}</Text>
+                            <Text style={styles.statSub}>{stat.sub}</Text>
                         </View>
+                    ))}
+                </View>
 
-                        <View style={styles.controlsRight}>
-                            <TypeFilterDropdown value={typeFilter} options={businessTypes} onChange={setTypeFilter} />
-
-                            <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-                                <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
-                                <Text style={styles.addButtonText}>Add Business</Text>
-                            </TouchableOpacity>
-                        </View>
+                {/* Search + filter */}
+                {/* NOTE: TypeFilterDropdown renders its own trigger UI (its source
+                    isn't part of this file), so this wraps it in a compact square
+                    to match the mockup's icon-button look — if it still renders
+                    as a full-width dropdown, that component needs a small tweak
+                    to support an icon-only/compact mode. */}
+                <View style={styles.controlsRow}>
+                    <View style={styles.searchBox}>
+                        <Icon d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" size={16} color={colors.gray400} strokeWidth={1.8} />
+                        <TextInput
+                            value={search}
+                            onChangeText={setSearch}
+                            placeholder="Search businesses..."
+                            placeholderTextColor={colors.gray400}
+                            style={styles.searchInput}
+                        />
                     </View>
 
-                    {/* My Businesses / All Businesses toggle */}
-                    <View style={styles.toggleWrap}>
-                        <View style={styles.toggleGroup}>
-                            <TouchableOpacity
-                                onPress={() => setViewMode('My Businesses')}
-                                style={[styles.toggleButton, viewMode === 'My Businesses' && styles.toggleButtonActive]}
-                            >
-                                <Text style={viewMode === 'My Businesses' ? styles.toggleTextActive : styles.toggleText}>
-                                    My Businesses
-                                </Text>
-                                <View style={[styles.toggleCount, viewMode === 'My Businesses' && styles.toggleCountActive]}>
-                                    <Text style={viewMode === 'My Businesses' ? styles.toggleCountTextActive : styles.toggleCountText}>
-                                        {businesses.filter((b) => !!b.userRole).length}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                onPress={() => setViewMode('All Businesses')}
-                                style={[styles.toggleButton, viewMode === 'All Businesses' && styles.toggleButtonActive]}
-                            >
-                                <Text style={viewMode === 'All Businesses' ? styles.toggleTextActive : styles.toggleText}>
-                                    All Businesses
-                                </Text>
-                                <View style={[styles.toggleCount, viewMode === 'All Businesses' && styles.toggleCountActive]}>
-                                    <Text style={viewMode === 'All Businesses' ? styles.toggleCountTextActive : styles.toggleCountText}>
-                                        {businesses.length}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        </View>
+                    <View style={styles.filterButtonWrap}>
+                        <TypeFilterDropdown value={typeFilter} options={businessTypes} onChange={setTypeFilter} />
                     </View>
+                </View>
 
-                    {/* Business list */}
-                    <View style={styles.listCard}>
-                        {loading && displayedBusinesses.length === 0 && (
-                            <Text style={styles.emptyState}>Loading businesses...</Text>
-                        )}
-
-                        {!loading && displayedBusinesses.length === 0 && (
-                            <Text style={styles.emptyState}>
-                                {viewMode === 'My Businesses'
-                                    ? 'You haven\'t joined any businesses yet. Switch to "All Businesses" to find one.'
-                                    : 'No businesses found.'}
+                {/* My Businesses / All Businesses toggle */}
+                <View style={styles.toggleWrap}>
+                    <View style={styles.toggleGroup}>
+                        <TouchableOpacity
+                            onPress={() => setViewMode('My Businesses')}
+                            style={[styles.toggleButton, viewMode === 'My Businesses' && styles.toggleButtonActive]}
+                        >
+                            <Text style={viewMode === 'My Businesses' ? styles.toggleTextActive : styles.toggleText}>
+                                My Businesses
                             </Text>
-                        )}
+                            <View style={[styles.toggleCount, viewMode === 'My Businesses' && styles.toggleCountActive]}>
+                                <Text style={viewMode === 'My Businesses' ? styles.toggleCountTextActive : styles.toggleCountText}>
+                                    {businesses.filter((b) => !!b.userRole).length}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
 
-                        {displayedBusinesses.map((biz) => {
-                            const { bgColor, color, icon } = getBusinessIcon(biz.type)
-                            // Only show Join when the user has no role at all for this
-                            // business — owners, managers, and existing staff already
-                            // belong, so Join would be meaningless for them.
-                            const hasJoined = !!biz.userRole
-                            const hasPendingRequest = pendingRequestBusinessIds.has(biz.id)
-                            const joinButtonDisabled = hasJoined || hasPendingRequest
-                            // Leave is only meaningful (and only allowed) for
-                            // managers/staff — an owner leaving their own business
-                            // makes no sense without a separate ownership-transfer
-                            // flow, so the option is hidden entirely for owners.
-                            const canLeave = biz.userRole === 'manager' || biz.userRole === 'staff'
-                            return (
-                                <View key={biz.id} style={styles.row}>
-                                    <View style={styles.rowTop}>
-                                        <View style={[styles.rowIcon, { backgroundColor: biz.logoUrl ? colors.gray100 : bgColor }]}>
-                                            {biz.logoUrl ? (
-                                                <Image source={{ uri: biz.logoUrl }} style={styles.rowIconImage} />
-                                            ) : (
-                                                icon
-                                            )}
-                                        </View>
-                                        <View style={styles.rowNameBlock}>
-                                            <Text style={styles.rowName} numberOfLines={1}>{biz.name}</Text>
-                                            <Text style={styles.rowType}>{biz.type}</Text>
-                                        </View>
-
-                                        <View style={styles.rowMenuAnchor}>
-                                            <TouchableOpacity
-                                                style={styles.menuDotsButton}
-                                                onPress={() => setOpenMenuId(openMenuId === biz.id ? null : biz.id)}
-                                            >
-                                                <Icon
-                                                    d="M12 6.75a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 7.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"
-                                                    size={16}
-                                                    color={colors.gray400}
-                                                    variant="fill"
-                                                />
-                                            </TouchableOpacity>
-
-                                            {openMenuId === biz.id && (
-                                                <View style={styles.menuPanel}>
-                                                    <TouchableOpacity
-                                                        style={styles.menuItem}
-                                                        onPress={() => {
-                                                            setEditingBusiness(biz)
-                                                            setOpenMenuId(null)
-                                                        }}
-                                                    >
-                                                        <Icon
-                                                            d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
-                                                            size={16}
-                                                            color={colors.gray400}
-                                                            strokeWidth={1.8}
-                                                        />
-                                                        <Text style={styles.menuItemText}>Edit details</Text>
-                                                    </TouchableOpacity>
-
-                                                    <TouchableOpacity
-                                                        style={styles.menuItem}
-                                                        onPress={() => {
-                                                            setViewingTeamBusiness(biz)
-                                                            setOpenMenuId(null)
-                                                        }}
-                                                    >
-                                                        <Icon
-                                                            d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.94-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.06 2.772m0 0A6.001 6.001 0 006 18.719m6-15.219a3.75 3.75 0 100 7.5 3.75 3.75 0 000-7.5zm-8.25 5.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z"
-                                                            size={16}
-                                                            color={colors.gray400}
-                                                            strokeWidth={1.8}
-                                                        />
-                                                        <Text style={styles.menuItemText}>View team</Text>
-                                                    </TouchableOpacity>
-
-                                                    {canLeave && (
-                                                        <TouchableOpacity
-                                                            style={styles.menuItem}
-                                                            onPress={() => {
-                                                                setLeavingBusiness(biz)
-                                                                setOpenMenuId(null)
-                                                            }}
-                                                        >
-                                                            <Icon
-                                                                d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
-                                                                size={16}
-                                                                color={colors.orange600}
-                                                                strokeWidth={1.8}
-                                                            />
-                                                            <Text style={styles.menuItemTextOrange}>Leave business</Text>
-                                                        </TouchableOpacity>
-                                                    )}
-
-                                                    <View style={styles.menuDivider} />
-
-                                                    <TouchableOpacity
-                                                        style={styles.menuItem}
-                                                        onPress={() => {
-                                                            setDeletingBusiness(biz)
-                                                            setOpenMenuId(null)
-                                                        }}
-                                                    >
-                                                        <Icon
-                                                            d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                                                            size={16}
-                                                            color={colors.red500}
-                                                            strokeWidth={1.8}
-                                                        />
-                                                        <Text style={styles.menuItemTextRed}>Delete</Text>
-                                                    </TouchableOpacity>
-                                                </View>
-                                            )}
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.rowMeta}>
-                                        <View style={styles.rowMetaLine}>
-                                            <Icon
-                                                d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"
-                                                size={14}
-                                                color={colors.gray500}
-                                                strokeWidth={1.8}
-                                            />
-                                            <Text style={styles.rowMetaText} numberOfLines={1}>{biz.address}</Text>
-                                        </View>
-                                        <View style={styles.rowMetaLine}>
-                                            <Icon
-                                                d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
-                                                size={14}
-                                                color={colors.gray500}
-                                                strokeWidth={1.8}
-                                            />
-                                            <Text style={styles.rowMetaText}>{biz.phone}</Text>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.rowBadges}>
-                                        <TouchableOpacity
-                                            style={styles.receiptsBadge}
-                                            onPress={() => navigateToReceiptsPage(biz)}
-                                        >
-                                            <Icon
-                                                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6 15.75h-6a2.25 2.25 0 01-2.25-2.25V6a2.25 2.25 0 012.25-2.25h4.5l5.25 5.25v9.75a2.25 2.25 0 01-2.25 2.25z"
-                                                size={16}
-                                                color={colors.blue700}
-                                                strokeWidth={1.8}
-                                            />
-                                            <Text style={styles.receiptsBadgeText}>Receipts</Text>
-                                        </TouchableOpacity>
-
-                                        {biz.userRole && (
-                                            <View style={styles.roleBadge}>
-                                                <Icon
-                                                    d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"
-                                                    size={16}
-                                                    color={colors.green700}
-                                                    strokeWidth={1.8}
-                                                />
-                                                <Text style={styles.roleBadgeText}>{biz.userRole}</Text>
-                                            </View>
-                                        )}
-                                    </View>
-
-                                    <TouchableOpacity
-                                        disabled={joinButtonDisabled}
-                                        onPress={() => {
-                                            if (!joinButtonDisabled) setJoiningBusiness(biz)
-                                        }}
-                                        style={[styles.joinButton, joinButtonDisabled ? styles.joinButtonDisabled : styles.joinButtonActive]}
-                                    >
-                                        <Text style={joinButtonDisabled ? styles.joinButtonTextDisabled : styles.joinButtonTextActive}>
-                                            {hasJoined ? 'Joined' : hasPendingRequest ? 'Pending' : 'Join'}
-                                        </Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )
-                        })}
+                        <TouchableOpacity
+                            onPress={() => setViewMode('All Businesses')}
+                            style={[styles.toggleButton, viewMode === 'All Businesses' && styles.toggleButtonActive]}
+                        >
+                            <Text style={viewMode === 'All Businesses' ? styles.toggleTextActive : styles.toggleText}>
+                                All Businesses
+                            </Text>
+                            <View style={[styles.toggleCount, viewMode === 'All Businesses' && styles.toggleCountActive]}>
+                                <Text style={viewMode === 'All Businesses' ? styles.toggleCountTextActive : styles.toggleCountText}>
+                                    {businesses.length}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
                     </View>
-                </Pressable>
+                </View>
+
+                {/* Business list */}
+                <View style={styles.listCard}>
+                    {loading && displayedBusinesses.length === 0 && (
+                        <Text style={styles.emptyState}>Loading businesses...</Text>
+                    )}
+
+                    {!loading && displayedBusinesses.length === 0 && (
+                        <Text style={styles.emptyState}>
+                            {viewMode === 'My Businesses'
+                                ? 'You haven\'t joined any businesses yet. Switch to "All Businesses" to find one.'
+                                : 'No businesses found.'}
+                        </Text>
+                    )}
+
+                    {displayedBusinesses.map((biz) => {
+                        const { bgColor, icon } = getBusinessIcon(biz.type)
+                        // Only show Join when the user has no role at all for this
+                        // business — owners, managers, and existing staff already
+                        // belong, so Join would be meaningless for them.
+                        const hasJoined = !!biz.userRole
+                        const hasPendingRequest = pendingRequestBusinessIds.has(biz.id)
+                        const joinButtonDisabled = hasJoined || hasPendingRequest
+                        return (
+                            <TouchableOpacity
+                                key={biz.id}
+                                style={styles.row}
+                                activeOpacity={0.7}
+                                onPress={() => setDetailBusiness(biz)}
+                            >
+                                <View style={[styles.rowIcon, { backgroundColor: biz.logoUrl ? colors.gray100 : bgColor }]}>
+                                    {biz.logoUrl ? (
+                                        <Image source={{ uri: biz.logoUrl }} style={styles.rowIconImage} />
+                                    ) : (
+                                        icon
+                                    )}
+                                </View>
+                                <View style={styles.rowNameBlock}>
+                                    <Text style={styles.rowName} numberOfLines={1}>{biz.name}</Text>
+                                    <Text style={styles.rowType}>{biz.type}</Text>
+                                </View>
+
+                                <TouchableOpacity
+                                    disabled={joinButtonDisabled}
+                                    onPress={() => {
+                                        if (!joinButtonDisabled) setJoiningBusiness(biz)
+                                    }}
+                                    style={[styles.joinButton, joinButtonDisabled ? styles.joinButtonDisabled : styles.joinButtonActive]}
+                                >
+                                    <Text style={joinButtonDisabled ? styles.joinButtonTextDisabled : styles.joinButtonTextActive}>
+                                        {hasJoined ? 'Joined' : hasPendingRequest ? 'Pending' : 'Join'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                <Icon d="M8.25 4.5l7.5 7.5-7.5 7.5" size={16} color={colors.gray300} strokeWidth={1.8} />
+                            </TouchableOpacity>
+                        )
+                    })}
+                </View>
+
+                {/* Bottom tip banner */}
+                <View style={styles.tipBanner}>
+                    <View style={styles.tipIcon}>
+                        <Icon
+                            d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                            size={20}
+                            color={colors.blue600}
+                            strokeWidth={1.8}
+                        />
+                    </View>
+                    <View style={styles.tipTextBlock}>
+                        <Text style={styles.tipTitle}>Stay organized</Text>
+                        <Text style={styles.tipSubtitle}>
+                            Keep all your business information and receipts in one secure place.
+                        </Text>
+                    </View>
+                </View>
             </ScrollView>
 
             {showAddModal && (
@@ -973,6 +857,20 @@ export default function BusinessPage() {
                     onClose={() => {
                         if (!leaveLoading) setLeavingBusiness(null)
                     }}
+                />
+            )}
+
+            {detailBusiness && (
+                <BusinessDetailsSheet
+                    business={detailBusiness}
+                    hasPendingRequest={pendingRequestBusinessIds.has(detailBusiness.id)}
+                    onClose={() => setDetailBusiness(null)}
+                    onViewReceipts={navigateToReceiptsPage}
+                    onEdit={setEditingBusiness}
+                    onViewTeam={setViewingTeamBusiness}
+                    onLeave={setLeavingBusiness}
+                    onDelete={setDeletingBusiness}
+                    onJoin={setJoiningBusiness}
                 />
             )}
         </Layout>
@@ -1132,10 +1030,13 @@ const styles = StyleSheet.create({
         marginTop: 4,
     },
     controlsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
         gap: 12,
         marginBottom: 16,
     },
     searchBox: {
+        flex: 7,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
@@ -1150,26 +1051,15 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: colors.gray700,
     },
-    controlsRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    addButton: {
-        flex: 1,
-        flexDirection: 'row',
+    filterButtonWrap: {
+        flex: 3,
+        minHeight: 44,
+        paddingHorizontal: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.gray200,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        backgroundColor: colors.blue600,
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        minHeight: 44,
-    },
-    addButtonText: {
-        color: colors.white,
-        fontSize: 14,
-        fontWeight: '600',
     },
     toggleWrap: {
         marginBottom: 16,
@@ -1178,14 +1068,15 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        alignSelf: 'flex-start',
         backgroundColor: colors.gray100,
         borderRadius: 8,
         padding: 6,
     },
     toggleButton: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 6,
         borderRadius: 6,
         paddingHorizontal: 10,
@@ -1240,16 +1131,13 @@ const styles = StyleSheet.create({
         color: colors.gray400,
     },
     row: {
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-        borderTopWidth: 1,
-        borderTopColor: colors.gray100,
-    },
-    rowTop: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderTopWidth: 1,
+        borderTopColor: colors.gray100,
     },
     rowIcon: {
         width: 40,
@@ -1276,131 +1164,61 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: colors.gray400,
     },
-    rowMenuAnchor: {
-        position: 'relative',
-    },
-    menuDotsButton: {
-        width: 36,
-        height: 36,
+    joinButton: {
+        minWidth: 76,
+        minHeight: 36,
         borderRadius: 8,
-        backgroundColor: colors.gray50,
+        borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    menuPanel: {
-        position: 'absolute',
-        right: 0,
-        top: 40,
-        width: 170,
-        backgroundColor: colors.white,
-        borderWidth: 1,
-        borderColor: colors.gray100,
-        borderRadius: 12,
-        paddingVertical: 6,
-        zIndex: 20,
-        elevation: 6,
-        shadowColor: colors.black,
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 4 },
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
         paddingHorizontal: 14,
-        paddingVertical: 10,
     },
-    menuItemText: {
-        fontSize: 14,
-        color: colors.gray700,
-    },
-    menuItemTextOrange: {
-        fontSize: 14,
-        color: colors.orange600,
-    },
-    menuItemTextRed: {
-        fontSize: 14,
-        color: colors.red500,
-    },
-    menuDivider: {
-        borderTopWidth: 1,
-        borderTopColor: colors.gray100,
-        marginVertical: 4,
-    },
-    rowMeta: {
-        gap: 4,
-    },
-    rowMetaLine: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    rowMetaText: {
-        fontSize: 12,
-        color: colors.gray500,
-        flexShrink: 1,
-    },
-    rowBadges: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    receiptsBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
+    joinButtonActive: {
         backgroundColor: colors.blue50,
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        borderColor: colors.blue50,
     },
-    receiptsBadgeText: {
-        fontSize: 14,
+    joinButtonDisabled: {
+        backgroundColor: colors.blue50,
+        borderColor: colors.blue50,
+    },
+    joinButtonTextActive: {
+        fontSize: 13,
         fontWeight: '600',
         color: colors.blue700,
     },
-    roleBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: colors.green50,
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    roleBadgeText: {
-        fontSize: 14,
+    joinButtonTextDisabled: {
+        fontSize: 13,
         fontWeight: '600',
-        color: colors.green700,
-        textTransform: 'capitalize',
+        color: colors.blue700,
     },
-    joinButton: {
-        alignSelf: 'flex-start',
-        minWidth: 96,
-        minHeight: 44,
-        borderRadius: 8,
-        borderWidth: 1,
+    tipBanner: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+        backgroundColor: colors.blue50,
+        borderRadius: 16,
+        padding: 16,
+    },
+    tipIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: colors.white,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 16,
     },
-    joinButtonActive: {
-        backgroundColor: colors.blue600,
-        borderColor: colors.blue600,
+    tipTextBlock: {
+        flex: 1,
     },
-    joinButtonDisabled: {
-        backgroundColor: colors.white,
-        borderColor: colors.blue600,
-    },
-    joinButtonTextActive: {
+    tipTitle: {
         fontSize: 14,
-        fontWeight: '500',
-        color: colors.white,
+        fontWeight: '700',
+        color: colors.gray900,
+        marginBottom: 2,
     },
-    joinButtonTextDisabled: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: colors.blue600,
+    tipSubtitle: {
+        fontSize: 13,
+        color: colors.gray500,
+        lineHeight: 18,
     },
 })

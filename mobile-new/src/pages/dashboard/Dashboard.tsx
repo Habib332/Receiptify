@@ -15,7 +15,8 @@ import {
 import * as FileSystem from 'expo-file-system'
 
 import * as Sharing from 'expo-sharing'
-import { useRoute, type RouteProp } from '@react-navigation/native'
+import { useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native'
+import type { MainTabParamList } from '../../components/MainTabs'
 import {
     Bell,
     Plus,
@@ -31,7 +32,6 @@ import {
     Receipt as ReceiptIcon,
     Wallet,
 } from 'lucide-react-native'
-import type { RootStackParamList } from '../../../App'
 import Layout from '../../components/Layout'
 import DeleteReceiptModal from './DeleteReceiptModal'
 import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal'
@@ -145,7 +145,7 @@ type DashboardRouteParams = {
     businessId?: string
 }
 
-type Route = RouteProp<RootStackParamList, 'Dashboard'>
+type Route = RouteProp<MainTabParamList, 'Dashboard'>
 
 export default function Dashboard() {
     // Web read this from react-router's navigate('/dashboard', { state: { businessId } }).
@@ -441,9 +441,19 @@ export default function Dashboard() {
         }
     }, [selectedBusinessId, fetchAllBusinessesData, fetchStats, fetchAllReceipts, fetchReceipts])
 
-    useEffect(() => {
-        fetchBusinesses()
-    }, [fetchBusinesses])
+    // FIX: previously this only ran once via a plain useEffect, which fires
+    // on mount only. Because React Navigation keeps screens mounted when you
+    // navigate away and back, creating a new business and returning to
+    // Dashboard never re-triggered this fetch — `businesses` stayed stale,
+    // so the new business (and its receipts) wouldn't show up until a full
+    // app remount (e.g. logging out/in). useFocusEffect re-runs this every
+    // time the Dashboard screen regains focus, which also covers the
+    // initial mount, so the old plain effect can be removed.
+    useFocusEffect(
+        useCallback(() => {
+            fetchBusinesses()
+        }, [fetchBusinesses])
+    )
 
     useEffect(() => {
         if (!businessIdFromNavigation) return
