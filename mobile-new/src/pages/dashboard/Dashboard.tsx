@@ -23,6 +23,7 @@ import {
     SlidersHorizontal,
     Download,
     ChevronDown,
+    ChevronRight,
     MoreVertical,
     Eye,
     Pencil,
@@ -31,6 +32,10 @@ import {
     ArrowUpRight,
     Receipt as ReceiptIcon,
     Wallet,
+    FileSearch,
+    ShieldCheck,
+    Info,
+    X,
 } from 'lucide-react-native'
 import Layout from '../../components/Layout'
 import DeleteReceiptModal from './DeleteReceiptModal'
@@ -188,6 +193,8 @@ export default function Dashboard() {
     const [showNotifications, setShowNotifications] = useState(false)
     const [notifications, setNotifications] = useState<NotificationItem[]>([])
     const [notificationsLoading, setNotificationsLoading] = useState(false)
+
+    const [showThisMonthChart, setShowThisMonthChart] = useState(false)
 
     const fetchBusinesses = useCallback(async () => {
         setBusinessesLoading(true)
@@ -699,6 +706,8 @@ export default function Dashboard() {
 
     const menuRow = pageReceipts.find((r) => r.receipt_id === openMenuId) || null
 
+    const isEmpty = !loading && !switchingBusiness && receipts.length === 0
+
     return (
         <Layout>
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -735,7 +744,8 @@ export default function Dashboard() {
                 <View style={styles.hero}>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.heroTitle}>
-                            All your receipts, <Text style={{ color: '#2563EB' }}>organized.</Text>
+                            All your receipts,{'\n'}
+                            <Text style={styles.heroTitleAccent}>organized.</Text>
                         </Text>
                         <Text style={styles.heroSub}>
                             Keep track of every expense with ease. Search, filter and export your receipt data anytime.
@@ -744,7 +754,7 @@ export default function Dashboard() {
                             onPress={() => Linking.openURL('/scan')}
                             style={styles.heroButton}
                         >
-                            <Plus size={16} color="#fff" />
+                            <Plus size={16} color="#2563EB" />
                             <Text style={styles.heroButtonText}>Upload Receipt</Text>
                         </TouchableOpacity>
                     </View>
@@ -752,7 +762,7 @@ export default function Dashboard() {
                 </View>
 
                 {/* Stats */}
-                <View style={styles.statsGrid}>
+                <View style={styles.statsRow}>
                     <StatCard
                         label="Total Receipts"
                         value={stats?.receiptCount ?? 0}
@@ -773,23 +783,65 @@ export default function Dashboard() {
                         icon={<Wallet size={18} color="#16A34A" />}
                     />
 
-                    {/* This Month — total + daily mini line chart */}
+                    {/* This Month — total only; daily breakdown chart moved
+                        behind the info icon so this card matches the height
+                        of the other two stat cards. */}
                     <View style={styles.statCard}>
-                        <View style={styles.thisMonthHeader}>
-                            <View style={styles.thisMonthLeft}>
-                                <View style={[styles.statIconWrap, { backgroundColor: '#FEFCE8' }]}>
-                                    <ArrowUpRight size={16} color="#EAB308" />
-                                </View>
-                                <Text style={styles.statLabel}>This Month</Text>
+                        <View style={styles.statCardTopRow}>
+                            <View style={[styles.statIconWrap, { backgroundColor: '#FEFCE8' }]}>
+                                <ArrowUpRight size={16} color="#EAB308" />
                             </View>
-                            <Text style={styles.thisMonthCount}>{thisMonth.count} receipts</Text>
+                            <TouchableOpacity
+                                onPress={() => setShowThisMonthChart(true)}
+                                style={styles.statInfoButton}
+                                accessibilityLabel="View this month's daily breakdown"
+                            >
+                                <Info size={14} color="#9CA3AF" />
+                            </TouchableOpacity>
                         </View>
-                        <Text style={styles.statValue}>
+                        <Text style={styles.statLabel}>This Month</Text>
+                        <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
                             {statsLoading ? '—' : formatAmount(animatedThisMonthTotal, thisMonth.currency)}
                         </Text>
-                        <MiniLineChart data={dailyData} />
+                        <Text style={styles.statSub}>{thisMonth.count} receipts</Text>
                     </View>
                 </View>
+
+                {/* This Month daily breakdown — moved out of the card into
+                    a modal opened by the info icon, so the chart no longer
+                    forces the "This Month" card to be taller than the
+                    other two stat cards. */}
+                <Modal
+                    transparent
+                    animationType="fade"
+                    visible={showThisMonthChart}
+                    onRequestClose={() => setShowThisMonthChart(false)}
+                >
+                    <TouchableOpacity
+                        style={styles.menuOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowThisMonthChart(false)}
+                    >
+                        <TouchableOpacity activeOpacity={1} style={styles.chartModalCard}>
+                            <View style={styles.chartModalHeader}>
+                                <View>
+                                    <Text style={styles.chartModalTitle}>This Month</Text>
+                                    <Text style={styles.chartModalSubtitle}>
+                                        {statsLoading ? '—' : formatAmount(thisMonth.total, thisMonth.currency)} · {thisMonth.count} receipts
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => setShowThisMonthChart(false)}
+                                    style={styles.chartModalClose}
+                                    accessibilityLabel="Close"
+                                >
+                                    <X size={18} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            </View>
+                            <MiniLineChart data={dailyData} />
+                        </TouchableOpacity>
+                    </TouchableOpacity>
+                </Modal>
 
                 {/* Business selector + search */}
                 <View style={styles.controlsRow}>
@@ -801,20 +853,29 @@ export default function Dashboard() {
                         switching={switchingBusiness}
                     />
 
-                    <View style={styles.searchWrap}>
-                        <Search size={16} color="#9CA3AF" style={styles.searchIcon} />
-                        <TextInput
-                            value={referenceSearch}
-                            onChangeText={setReferenceSearch}
-                            editable={selectedBusinessId !== 'all'}
-                            placeholder={
-                                selectedBusinessId === 'all'
-                                    ? 'Select a business to search...'
-                                    : 'Search by reference number...'
-                            }
-                            placeholderTextColor="#9CA3AF"
-                            style={[styles.searchInput, selectedBusinessId === 'all' && styles.searchInputDisabled]}
-                        />
+                    <View style={styles.searchRow}>
+                        <View style={styles.searchWrap}>
+                            <Search size={16} color="#9CA3AF" style={styles.searchIcon} />
+                            <TextInput
+                                value={referenceSearch}
+                                onChangeText={setReferenceSearch}
+                                editable={selectedBusinessId !== 'all'}
+                                placeholder={
+                                    selectedBusinessId === 'all'
+                                        ? 'Select a business to search...'
+                                        : 'Search receipts...'
+                                }
+                                placeholderTextColor="#9CA3AF"
+                                style={[styles.searchInput, selectedBusinessId === 'all' && styles.searchInputDisabled]}
+                            />
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => setShowFilterPanel((v) => !v)}
+                            disabled={selectedBusinessId === 'all'}
+                            style={[styles.iconButton, selectedBusinessId === 'all' && styles.disabledOpacity]}
+                        >
+                            <SlidersHorizontal size={16} color="#374151" />
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.actionsRow}>
@@ -823,11 +884,11 @@ export default function Dashboard() {
                             disabled={selectedBusinessId === 'all'}
                             style={[styles.filterButton, selectedBusinessId === 'all' && styles.disabledOpacity]}
                         >
-                            <SlidersHorizontal size={16} color="#fff" />
+                            <SlidersHorizontal size={16} color="#374151" />
                             <Text style={styles.filterButtonText}>Filter</Text>
                         </TouchableOpacity>
 
-                        <View>
+                        <View style={{ flex: 1 }}>
                             <TouchableOpacity
                                 onPress={() => setShowExportMenu((v) => !v)}
                                 disabled={selectedBusinessId === 'all' || exportingFormat !== null}
@@ -895,76 +956,86 @@ export default function Dashboard() {
                     horizontally-scrollable grid of fixed-width columns that
                     mirrors the web layout 1:1 (same columns, same order). */}
                 <View style={styles.tableWrap}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <View>
-                            <View style={styles.tableHeaderRow}>
-                                <Text style={[styles.th, COL.date]}>Date</Text>
-                                <Text style={[styles.th, COL.name]}>Receiver</Text>
-                                <Text style={[styles.th, COL.name]}>Sender</Text>
-                                <Text style={[styles.th, COL.ref]}>Reference</Text>
-                                <Text style={[styles.th, COL.amount]}>Amount</Text>
-                                <Text style={[styles.th, COL.status]}>Status</Text>
-                                <Text style={[styles.th, COL.screenshot]}>Screenshot</Text>
-                                <Text style={[styles.th, COL.actions]} />
-                            </View>
-
-                            {(loading || switchingBusiness) && receipts.length === 0 && (
-                                <View style={styles.tableEmptyRow}>
-                                    <ActivityIndicator size="small" color="#9CA3AF" />
-                                    <Text style={styles.tableEmptyText}>
-                                        {switchingBusiness ? 'Switching business...' : 'Loading receipts...'}
-                                    </Text>
+                    {isEmpty ? (
+                        <EmptyReceiptsState onUpload={() => Linking.openURL('/scan')} />
+                    ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View>
+                                <View style={styles.tableHeaderRow}>
+                                    <Text style={[styles.th, COL.date]}>Date</Text>
+                                    <Text style={[styles.th, COL.name]}>Receiver</Text>
+                                    <Text style={[styles.th, COL.name]}>Sender</Text>
+                                    <Text style={[styles.th, COL.ref]}>Reference</Text>
+                                    <Text style={[styles.th, COL.amount]}>Amount</Text>
+                                    <Text style={[styles.th, COL.status]}>Status</Text>
+                                    <Text style={[styles.th, COL.screenshot]}>Screenshot</Text>
+                                    <Text style={[styles.th, COL.actions]} />
                                 </View>
-                            )}
 
-                            {!loading && !switchingBusiness && receipts.length === 0 && (
-                                <View style={styles.tableEmptyRow}>
-                                    <Text style={styles.tableEmptyText}>No receipts found.</Text>
-                                </View>
-                            )}
+                                {(loading || switchingBusiness) && (
+                                    <View style={styles.tableEmptyRow}>
+                                        <ActivityIndicator size="small" color="#9CA3AF" />
+                                        <Text style={styles.tableEmptyText}>
+                                            {switchingBusiness ? 'Switching business...' : 'Loading receipts...'}
+                                        </Text>
+                                    </View>
+                                )}
 
-                            {pageReceipts.map((row) => {
-                                const dupStyle = DUPLICATE_STYLES[row.duplicate_status]
-                                return (
-                                    <View key={row.receipt_id} style={styles.tableRow}>
-                                        <Text style={[styles.td, COL.date, styles.tdMuted]}>{formatDate(row.receipt_date)}</Text>
-                                        <Text style={[styles.td, COL.name]} numberOfLines={1}>{row.receiver_name || 'Unknown'}</Text>
-                                        <Text style={[styles.td, COL.name]} numberOfLines={1}>{row.sender_name || 'Unknown'}</Text>
-                                        <Text style={[styles.td, COL.ref, styles.tdMuted]} numberOfLines={1}>{row.transaction_reference || '—'}</Text>
-                                        <Text style={[styles.td, COL.amount, styles.tdStrong]}>{formatAmount(row.amount, row.currency)}</Text>
-                                        <View style={[COL.status, { justifyContent: 'center' }]}>
-                                            <View style={[styles.statusPill, { backgroundColor: dupStyle.bg }]}>
-                                                <Text style={[styles.statusPillText, { color: dupStyle.text }]}>
-                                                    {DUPLICATE_LABELS[row.duplicate_status]}
-                                                </Text>
+                                {pageReceipts.map((row) => {
+                                    const dupStyle = DUPLICATE_STYLES[row.duplicate_status]
+                                    return (
+                                        <View key={row.receipt_id} style={styles.tableRow}>
+                                            <Text style={[styles.td, COL.date, styles.tdMuted]}>{formatDate(row.receipt_date)}</Text>
+                                            <Text style={[styles.td, COL.name]} numberOfLines={1}>{row.receiver_name || 'Unknown'}</Text>
+                                            <Text style={[styles.td, COL.name]} numberOfLines={1}>{row.sender_name || 'Unknown'}</Text>
+                                            <Text style={[styles.td, COL.ref, styles.tdMuted]} numberOfLines={1}>{row.transaction_reference || '—'}</Text>
+                                            <Text style={[styles.td, COL.amount, styles.tdStrong]}>{formatAmount(row.amount, row.currency)}</Text>
+                                            <View style={[COL.status, { justifyContent: 'center' }]}>
+                                                <View style={[styles.statusPill, { backgroundColor: dupStyle.bg }]}>
+                                                    <Text style={[styles.statusPillText, { color: dupStyle.text }]}>
+                                                        {DUPLICATE_LABELS[row.duplicate_status]}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <View style={[COL.screenshot, { justifyContent: 'center' }]}>
+                                                <TouchableOpacity
+                                                    onPress={() => handleView(row)}
+                                                    disabled={!row.image_url}
+                                                    style={styles.viewScreenshotButton}
+                                                >
+                                                    <Eye size={14} color={row.image_url ? '#2563EB' : '#D1D5DB'} />
+                                                    <Text style={[styles.viewScreenshotText, !row.image_url && { color: '#D1D5DB' }]}>
+                                                        View
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <View style={[COL.actions, { alignItems: 'flex-end', justifyContent: 'center' }]}>
+                                                <TouchableOpacity
+                                                    onPress={() => setOpenMenuId(row.receipt_id)}
+                                                    style={styles.moreButton}
+                                                >
+                                                    <MoreVertical size={16} color="#D1D5DB" />
+                                                </TouchableOpacity>
                                             </View>
                                         </View>
-                                        <View style={[COL.screenshot, { justifyContent: 'center' }]}>
-                                            <TouchableOpacity
-                                                onPress={() => handleView(row)}
-                                                disabled={!row.image_url}
-                                                style={styles.viewScreenshotButton}
-                                            >
-                                                <Eye size={14} color={row.image_url ? '#2563EB' : '#D1D5DB'} />
-                                                <Text style={[styles.viewScreenshotText, !row.image_url && { color: '#D1D5DB' }]}>
-                                                    View
-                                                </Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                        <View style={[COL.actions, { alignItems: 'flex-end', justifyContent: 'center' }]}>
-                                            <TouchableOpacity
-                                                onPress={() => setOpenMenuId(row.receipt_id)}
-                                                style={styles.moreButton}
-                                            >
-                                                <MoreVertical size={16} color="#D1D5DB" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                )
-                            })}
-                        </View>
-                    </ScrollView>
+                                    )
+                                })}
+                            </View>
+                        </ScrollView>
+                    )}
                 </View>
+
+                {/* Secure & Private trust card */}
+                <TouchableOpacity style={styles.secureCard} activeOpacity={0.8}>
+                    <View style={styles.secureIconWrap}>
+                        <ShieldCheck size={20} color="#2563EB" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.secureTitle}>Secure & Private</Text>
+                        <Text style={styles.secureSub}>Your receipts are encrypted and stored securely.</Text>
+                    </View>
+                    <ChevronRight size={18} color="#9CA3AF" />
+                </TouchableOpacity>
 
                 {/* Row action menu */}
                 <Modal transparent animationType="fade" visible={!!menuRow} onRequestClose={() => setOpenMenuId(null)}>
@@ -1113,6 +1184,25 @@ function FilterField({
     )
 }
 
+// New: shown in place of the receipts table when there is nothing to
+// display — mirrors the "No receipts found" empty state in the design,
+// with an icon, heading, helper copy, and a direct upload CTA.
+function EmptyReceiptsState({ onUpload }: { onUpload: () => void }) {
+    return (
+        <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+                <FileSearch size={30} color="#93C5FD" />
+            </View>
+            <Text style={styles.emptyTitle}>No receipts found</Text>
+            <Text style={styles.emptySub}>Try adjusting your search or upload a new receipt.</Text>
+            <TouchableOpacity onPress={onUpload} style={styles.emptyButton}>
+                <Plus size={16} color="#fff" />
+                <Text style={styles.emptyButtonText}>Upload Receipt</Text>
+            </TouchableOpacity>
+        </View>
+    )
+}
+
 function StatCard({
     label,
     value,
@@ -1140,9 +1230,9 @@ function StatCard({
         <View style={styles.statCard}>
             <View style={styles.statCardTopRow}>
                 <View style={[styles.statIconWrap, { backgroundColor: iconBg }]}>{icon}</View>
-                <Text style={styles.statLabel}>{label}</Text>
             </View>
-            <Text style={styles.statValue}>{displayValue}</Text>
+            <Text style={styles.statLabel}>{label}</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{displayValue}</Text>
             <Text style={styles.statSub}>{sub}</Text>
         </View>
     )
@@ -1165,8 +1255,8 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 40,
     },
-    
-    headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
+
+    headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 },
     h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
     h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
     bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
@@ -1193,54 +1283,81 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     errorText: { fontSize: 12, color: '#DC2626' },
+
+    // Hero — dark blue gradient card. RN has no CSS gradients without an
+    // extra dependency, so this uses a solid deep blue that matches the
+    // gradient's dominant tone; swap for expo-linear-gradient if/when
+    // that dependency is available in this project.
     hero: {
-        backgroundColor: '#EFF6FF',
-        borderRadius: 16,
+        backgroundColor: '#1E3A8A',
+        borderRadius: 20,
         padding: 20,
-        marginBottom: 24,
+        marginBottom: 20,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
+        overflow: 'hidden',
     },
-    heroTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 },
-    heroSub: { fontSize: 13, color: '#6B7280', marginBottom: 16, lineHeight: 18 },
+    heroTitle: { fontSize: 20, fontWeight: '700', color: '#fff', lineHeight: 26, marginBottom: 10 },
+    heroTitleAccent: { color: '#60A5FA' },
+    heroSub: { fontSize: 13, color: '#BFDBFE', marginBottom: 16, lineHeight: 18 },
     heroButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: '#2563EB',
-        borderRadius: 8,
+        backgroundColor: '#fff',
+        borderRadius: 10,
         paddingVertical: 12,
         paddingHorizontal: 16,
         alignSelf: 'flex-start',
     },
-    heroButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-    heroImage: { width: 90, height: 90 },
-    statsGrid: { gap: 12, marginBottom: 24 },
-    statCard: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 16, padding: 18, minHeight: 128, justifyContent: 'center', gap: 8 },
-    statCardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    statIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-    statLabel: { fontSize: 12, color: '#9CA3AF' },
-    statValue: { fontSize: 20, fontWeight: '700', color: '#111827' },
-    statSub: { fontSize: 12, color: '#9CA3AF' },
-    thisMonthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    thisMonthLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    thisMonthCount: { fontSize: 11, color: '#D1D5DB' },
+    heroButtonText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
+    heroImage: { width: 96, height: 96, borderRadius: 12 },
+
+    statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, alignItems: 'stretch' },
+    statCard: {
+        flex: 1,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        borderRadius: 16,
+        padding: 14,
+        gap: 4,
+    },
+    statCardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    statIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    statInfoButton: { padding: 4, marginRight: -4, marginTop: -4 },
+    statLabel: { fontSize: 11, color: '#9CA3AF' },
+    statValue: { fontSize: 16, fontWeight: '700', color: '#111827' },
+    statSub: { fontSize: 10, color: '#9CA3AF' },
+
     controlsRow: { gap: 12, marginBottom: 16 },
-    searchWrap: { position: 'relative', justifyContent: 'center' },
+    searchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    searchWrap: { flex: 1, position: 'relative', justifyContent: 'center' },
     searchIcon: { position: 'absolute', left: 12, zIndex: 1 },
     searchInput: {
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        borderRadius: 8,
+        borderRadius: 12,
         paddingLeft: 36,
         paddingRight: 12,
         paddingVertical: 12,
         fontSize: 13,
         color: '#111827',
+        backgroundColor: '#fff',
     },
     searchInputDisabled: { backgroundColor: '#F9FAFB', color: '#9CA3AF' },
+    iconButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#fff',
+    },
     actionsRow: { flexDirection: 'row', gap: 12 },
     disabledOpacity: { opacity: 0.5 },
     filterButton: {
@@ -1249,11 +1366,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        backgroundColor: '#2563EB',
-        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 10,
         paddingVertical: 12,
     },
-    filterButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+    filterButtonText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
     exportButton: {
         flex: 1,
         flexDirection: 'row',
@@ -1262,13 +1379,30 @@ const styles = StyleSheet.create({
         gap: 6,
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        borderRadius: 8,
+        borderRadius: 10,
         paddingVertical: 12,
         paddingHorizontal: 16,
+        backgroundColor: '#fff',
     },
     exportButtonText: { fontSize: 13, fontWeight: '600', color: '#374151' },
     menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center', padding: 16 },
     exportMenu: { width: 220, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 4 },
+    chartModalCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 20,
+    },
+    chartModalHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    chartModalTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+    chartModalSubtitle: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+    chartModalClose: { padding: 4 },
     exportMenuItem: { paddingHorizontal: 16, paddingVertical: 12 },
     exportMenuItemText: { fontSize: 14, color: '#374151' },
     allBusinessesNote: { fontSize: 12, color: '#9CA3AF', marginBottom: 16, marginTop: -4 },
@@ -1292,6 +1426,54 @@ const styles = StyleSheet.create({
     moreButton: { padding: 8 },
     tableEmptyRow: { paddingVertical: 40, alignItems: 'center', gap: 8 },
     tableEmptyText: { fontSize: 13, color: '#9CA3AF' },
+
+    // New empty state — icon in a soft blue circle, heading, helper
+    // copy, and a filled CTA that jumps straight into the upload flow.
+    emptyState: { paddingVertical: 44, paddingHorizontal: 24, alignItems: 'center' },
+    emptyIconWrap: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#EFF6FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    emptyTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 6 },
+    emptySub: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', lineHeight: 18, marginBottom: 20 },
+    emptyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#2563EB',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+    },
+    emptyButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+    // "Secure & Private" trust card
+    secureCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+    },
+    secureIconWrap: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secureTitle: { fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 2 },
+    secureSub: { fontSize: 12, color: '#6B7280', lineHeight: 16 },
+
     rowMenu: { width: 208, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 4 },
     rowMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
     rowMenuItemText: { fontSize: 14, color: '#374151' },

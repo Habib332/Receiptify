@@ -10,11 +10,12 @@ import ScanUpload from '../pages/scan/ScanUpload'
 import AboutTheCreatorsPage from '../pages/aboutTheCreators/AboutTheCreatorsPage'
 import UserProfileModal from '../pages/profile/UserProfileModal'
 import { API_BASE_URL, authHeaders } from '../api/config'
-
+import ScanBulkUpload from '../pages/scan/ScanBulkUpload'
 export type MainTabParamList = {
     Businesses: undefined
     Dashboard: { businessId?: string }
     Scan: undefined
+    ScanBulkUpload: undefined
     AboutTheCreators: undefined
     Profile: undefined
 }
@@ -113,6 +114,7 @@ const TAB_LABELS: Record<string, string> = {
     Businesses: 'Businesses',
     Dashboard: 'Dashboard',
     Scan: 'Scan',
+    ScanBulkUpload: 'Scan',
     AboutTheCreators: 'About',
     Profile: 'Profile',
 }
@@ -126,7 +128,9 @@ function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
                 {state.routes.map((route: any, index: number) => {
                     const isFocused = state.index === index
                     const isScan = route.name === 'Scan'
-
+                      if (route.name === 'ScanBulkUpload') {
+                      return null
+                    }
                     const onPress = () => {
                         const event = navigation.emit({
                             type: 'tabPress',
@@ -240,6 +244,7 @@ export default function MainTabs() {
             <Tab.Screen name="Businesses" component={BusinessPage} />
             <Tab.Screen name="Dashboard" component={Dashboard} />
             <Tab.Screen name="Scan" component={ScanUpload} />
+            <Tab.Screen name="ScanBulkUpload" component={ScanBulkUpload} />
             <Tab.Screen name="AboutTheCreators" component={AboutTheCreatorsPage} />
             <Tab.Screen name="Profile" component={UserProfileModal} />
         </Tab.Navigator>

@@ -92,6 +92,7 @@ export default function ScanUpload() {
                 logoUrl: b.logoUrl ?? b.logo_url ?? null,
                 userRole: b.userRole ?? b.user_role ?? null,
             }))
+            .filter((b: BusinessOption) => !!b.userRole)
 
             setBusinesses(normalized)
             // Auto-fill if there's exactly one option — user can still

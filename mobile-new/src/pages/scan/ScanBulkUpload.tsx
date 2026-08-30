@@ -102,6 +102,7 @@ export default function ScanBulkUpload() {
                 logoUrl: b.logoUrl ?? b.logo_url ?? null,
                 userRole: b.userRole ?? b.user_role ?? null,
             }))
+            .filter((b: BusinessOption) => !!b.userRole)
 
             setBusinesses(normalized)
             if (normalized.length === 1) {
@@ -293,9 +294,6 @@ export default function ScanBulkUpload() {
                         if (fieldErrors.businessId) setFieldErrors((prev) => ({ ...prev, businessId: undefined }))
                     }}
                     loading={businessesLoading}
-                    allowAll={false}
-                    fullWidth
-                    error={!!fieldErrors.businessId}
                 />
                 {fieldErrors.businessId && <Text style={styles.errorText}>{fieldErrors.businessId}</Text>}
             </View>

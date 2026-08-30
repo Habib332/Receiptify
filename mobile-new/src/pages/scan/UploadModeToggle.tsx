@@ -18,10 +18,10 @@ export default function UploadModeToggle({ mode }: UploadModeToggleProps) {
                     Single upload
                 </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-                onPress={() => navigation.navigate('MainTabs', { screen: 'ScanBulkUpload' })}
-                style={[styles.button, mode === 'bulk' && styles.buttonActive]}
-            >
+           <TouchableOpacity
+    onPress={() => navigation.navigate('MainTabs', { screen: 'ScanBulkUpload' })}
+    style={[styles.button, mode === 'bulk' && styles.buttonActive]}
+>
                 <Text style={[styles.buttonText, mode === 'bulk' ? styles.buttonTextActive : styles.buttonTextInactive]}>
                     Bulk upload
                 </Text>

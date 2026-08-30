@@ -9,7 +9,6 @@ import SignUp from './src/pages/auth/SignUp'
 import ForgotPassword from './src/pages/auth/ForgotPassword'
 import ResetPassword from './src/pages/auth/ResetPassword'
 import AuthCallback from './src/pages/auth/AuthCallback'
-import ScanBulkUpload from './src/pages/scan/ScanBulkUpload'
 import ScanReview from './src/pages/scan/ScanReview'
 import ScanBulkReview from './src/pages/scan/ScanBulkReview'
 import AboutReceiptifyPage from './src/pages/aboutTheReceiptify/AboutReceiptifyPage'
@@ -32,7 +31,6 @@ export type RootStackParamList = {
     ResetPassword: undefined // '/reset-password'
     AuthCallback: undefined // '/auth/callback'
     MainTabs: { screen?: string; params?: any } | undefined // Businesses / Dashboard / Scan / AboutTheCreators
-    ScanBulkUpload: undefined // '/scan/bulk'
     ScanReview: { receipt: any } // '/scan/review'
     ScanBulkReview: { receipts: any[] } // '/scan/bulk/review'
     AboutReceiptify: undefined // '/about-receiptify'
@@ -56,7 +54,6 @@ export default function App() {
                         <Stack.Screen name="ResetPassword" component={ResetPassword} />
                         <Stack.Screen name="AuthCallback" component={AuthCallback} />
                         <Stack.Screen name="MainTabs" component={MainTabs} />
-                        <Stack.Screen name="ScanBulkUpload" component={ScanBulkUpload} />
                         <Stack.Screen name="ScanReview" component={ScanReview} />
                         <Stack.Screen name="ScanBulkReview" component={ScanBulkReview} />
                         <Stack.Screen name="AboutReceiptify" component={AboutReceiptifyPage} />
