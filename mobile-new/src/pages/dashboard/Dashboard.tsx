@@ -15,7 +15,8 @@ import {
 import * as FileSystem from 'expo-file-system'
 
 import * as Sharing from 'expo-sharing'
-import { useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native'
+import { useRoute, useFocusEffect, useNavigation, type RouteProp } from '@react-navigation/native'
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs'
 import type { MainTabParamList } from '../../components/MainTabs'
 import {
     Bell,
@@ -157,7 +158,8 @@ export default function Dashboard() {
     // React Navigation's equivalent is a route param instead of router state.
     const route = useRoute<Route>()
     const businessIdFromNavigation = (route.params as DashboardRouteParams | undefined)?.businessId
-
+        const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>()
+        
     const [receipts, setReceipts] = useState<Receipt[]>([])
     const [allReceipts, setAllReceipts] = useState<Receipt[]>([])
     const [stats, setStats] = useState<Stats | null>(null)
@@ -751,7 +753,7 @@ export default function Dashboard() {
                             Keep track of every expense with ease. Search, filter and export your receipt data anytime.
                         </Text>
                         <TouchableOpacity
-                            onPress={() => Linking.openURL('/scan')}
+                            onPress={() => navigation.navigate('Scan')}
                             style={styles.heroButton}
                         >
                             <Plus size={16} color="#2563EB" />
@@ -957,7 +959,7 @@ export default function Dashboard() {
                     mirrors the web layout 1:1 (same columns, same order). */}
                 <View style={styles.tableWrap}>
                     {isEmpty ? (
-                        <EmptyReceiptsState onUpload={() => Linking.openURL('/scan')} />
+                        <EmptyReceiptsState onUpload={() => navigation.navigate('Scan')} />
                     ) : (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                             <View>
