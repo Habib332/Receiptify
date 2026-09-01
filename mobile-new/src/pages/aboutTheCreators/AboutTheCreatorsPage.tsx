@@ -25,7 +25,7 @@ const creators: Creator[] = [
         linkedin: 'https://www.linkedin.com/in/hamza-zeeshan-0a1407332/',
     },
     {
-        name: 'Habib Ahmed ',
+        name: 'Habib Ahmed      ',
         role: 'Backend Developer',
         description:
             'Developed the backend APIs, authentication system, database structure and business logic.',
