@@ -24,24 +24,21 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
     const activeIcon = !isAllTypes ? getBusinessIcon(value) : null
 
     return (
-        <View>
+         <View style={{ flexShrink: 1, minWidth: 0, width: '100%' }}>
             <TouchableOpacity
-                onPress={() => setOpen(true)}
-                style={[styles.trigger, open && styles.triggerOpen]}
-            >
-                {isAllTypes ? (
-                    <Icon d={gridIconPath} size={16} color={colors.gray400} strokeWidth={1.8} />
-                ) : (
-                    <View style={styles.activeIconWrap}>{activeIcon?.icon}</View>
-                )}
-                <Text style={styles.triggerText} numberOfLines={1}>{value}</Text>
-                <Icon
-                    d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-                    size={16}
-                    color={colors.gray400}
-                    strokeWidth={1.8}
-                />
-            </TouchableOpacity>
+    onPress={() => setOpen(true)}
+    style={[styles.trigger, open && styles.triggerOpen]}
+>
+    <Text style={styles.triggerText} numberOfLines={1}>
+        {isAllTypes ? 'Types' : value}
+    </Text>
+    <Icon
+        d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+        size={16}
+        color={colors.gray400}
+        strokeWidth={1.8}
+    />
+</TouchableOpacity>
 
             <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
                 <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
@@ -101,19 +98,19 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
 }
 
 const styles = StyleSheet.create({
-    trigger: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingVertical: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: colors.gray200,
-        backgroundColor: colors.white,
-        minWidth: 160,
-    },
+trigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 12,
+    paddingRight: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+    width: '100%',
+},
     triggerOpen: {
         borderColor: colors.blue300,
     },
