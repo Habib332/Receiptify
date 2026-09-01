@@ -9,8 +9,24 @@ import {
     StyleSheet,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { X, ChevronDown, Briefcase, Users, Receipt as ReceiptIcon } from 'lucide-react-native'
+import { useNavigation, CommonActions } from '@react-navigation/native'
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import {
+    X,
+    ChevronRight,
+    Briefcase,
+    Users,
+    Receipt as ReceiptIcon,
+    Bell,
+    Pencil,
+    Shield,
+    HelpCircle,
+    Info,
+    LogOut,
+} from 'lucide-react-native'
 import { API_BASE_URL, authHeaders } from '../../api/config'
+import type { MainTabParamList } from '../../components/MainTabs'
 
 type BusinessEntry = {
     business_id: number
@@ -51,7 +67,7 @@ type ProfileData = {
 type Props = {
     /** Optional: pass this if the component is rendered inside something
      *  dismissible (a sheet, a screen with a back action, etc). If omitted,
-     *  no close button is rendered. */
+     *  no close button is rendered and the bell takes the full top-right slot. */
     onClose?: () => void
 }
 
@@ -70,15 +86,14 @@ function formatJoinDate(iso: string) {
 }
 
 /**
- * Stat card with a tap-to-expand dropdown listing the underlying
- * businesses. Web used hover; mobile has no hover, so this expands on
- * tap instead (still reused for Owner / Manager & Staff / Receipts
- * Submitted so all three stay visually and behaviorally consistent).
+ * Stat row with a tap-to-expand dropdown listing the underlying
+ * businesses. Visually matches the reference design (icon, label/value/sub,
+ * chevron all in one row); the chevron rotates 90deg to double as an
+ * expand/collapse indicator so we keep the original drill-down behavior.
  */
-function ExpandableStatCard({
+function ExpandableStatRow({
     icon,
     bg,
-    color,
     label,
     value,
     sub,
@@ -87,7 +102,6 @@ function ExpandableStatCard({
 }: {
     icon: React.ReactNode
     bg: string
-    color: string
     label: string
     value: number
     sub: string
@@ -98,17 +112,19 @@ function ExpandableStatCard({
 
     return (
         <TouchableOpacity activeOpacity={0.8} onPress={() => setOpen((prev) => !prev)} style={styles.statCard}>
-            <View style={styles.statCardHeader}>
+            <View style={styles.statRow}>
                 <View style={[styles.statIconWrap, { backgroundColor: bg }]}>{icon}</View>
-                <ChevronDown
-                    size={16}
+                <View style={styles.statTextCol}>
+                    <Text style={styles.statLabel}>{label}</Text>
+                    <Text style={styles.statValue}>{value}</Text>
+                    <Text style={styles.statSub}>{sub}</Text>
+                </View>
+                <ChevronRight
+                    size={20}
                     color="#D1D5DB"
-                    style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
+                    style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}
                 />
             </View>
-            <Text style={styles.statLabel}>{label}</Text>
-            <Text style={styles.statValue}>{value}</Text>
-            <Text style={styles.statSub}>{sub}</Text>
 
             {open && (
                 <View style={styles.statDropdown}>
@@ -130,8 +146,41 @@ function ExpandableStatCard({
     )
 }
 
-export default function UserProfile({ onClose }: Props) {
+/** Plain navigation row used in the "Account" section. */
+function AccountRow({
+    icon,
+    bg,
+    title,
+    subtitle,
+    onPress,
+    isLast,
+}: {
+    icon: React.ReactNode
+    bg: string
+    title: string
+    subtitle: string
+    onPress: () => void
+    isLast?: boolean
+}) {
+    return (
+        <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onPress}
+            style={[styles.accountRow, !isLast && styles.accountRowDivider]}
+        >
+            <View style={[styles.accountIconWrap, { backgroundColor: bg }]}>{icon}</View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.accountTitle}>{title}</Text>
+                <Text style={styles.accountSubtitle}>{subtitle}</Text>
+            </View>
+            <ChevronRight size={18} color="#D1D5DB" />
+        </TouchableOpacity>
+    )
+}
+
+export default function UserProfileModal({ onClose }: Props) {
     const insets = useSafeAreaInsets()
+    const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>()
     const [data, setData] = useState<ProfileData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -169,15 +218,49 @@ export default function UserProfile({ onClose }: Props) {
 
     const managerAndStaff = data ? [...data.businesses.manager, ...data.businesses.staff] : []
 
+    // Placeholder — all Account rows point here for now; swap each one's
+    // onPress for its real destination once those screens exist.
+    const goToPlaceholder = () => navigation.navigate('Businesses')
+
+    // Clears everything cached locally (auth token, any persisted state)
+    // and drops the user back on the sign-in screen with a reset stack so
+    // they can't navigate "back" into the authenticated app.
+    const handleLogout = async () => {
+        try {
+            await AsyncStorage.clear()
+        } catch (err) {
+            console.error('Failed to clear cache on logout', err)
+        } finally {
+            const rootNavigation = navigation.getParent() ?? navigation
+            rootNavigation.dispatch(
+                CommonActions.reset({
+                    index: 0,
+                    // NOTE: replace 'SignIn' with whatever your auth stack's
+                    // sign-in route is actually named.
+                    routes: [{ name: 'SignIn' as never }],
+                }),
+            )
+        }
+    }
+
     return (
         <View style={[styles.card, { paddingTop: insets.top }]}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Profile</Text>
-                {onClose && (
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <X size={16} color="#9CA3AF" />
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.headerTitle}>Profile</Text>
+                    <Text style={styles.headerSubtitle}>Manage your account and view your activity.</Text>
+                </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity style={styles.bellButton} accessibilityLabel="Notifications">
+                        <Bell size={20} color="#111827" />
+                        <View style={styles.bellBadge} />
                     </TouchableOpacity>
-                )}
+                    {onClose && (
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityLabel="Close">
+                            <X size={16} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
 
             {loading && (
@@ -197,7 +280,7 @@ export default function UserProfile({ onClose }: Props) {
 
             {!loading && !error && data && (
                 <ScrollView contentContainerStyle={styles.body}>
-                    <View style={styles.identityRow}>
+                    <View style={styles.identityCard}>
                         <View style={styles.avatar}>
                             {data.user.avatar_url ? (
                                 <Image source={{ uri: data.user.avatar_url }} style={styles.avatarImg} />
@@ -210,15 +293,17 @@ export default function UserProfile({ onClose }: Props) {
                             <Text style={styles.userEmail} numberOfLines={1}>{data.user.email}</Text>
                             <Text style={styles.userJoined}>Joined {formatJoinDate(data.user.created_at)}</Text>
                         </View>
+                        <TouchableOpacity style={styles.editButton} accessibilityLabel="Edit profile">
+                            <Pencil size={16} color="#2563EB" />
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.statsCol}>
-                        <ExpandableStatCard
+                        <ExpandableStatRow
                             label="Businesses Owned"
                             value={data.businesses.owner_count}
                             sub={data.businesses.owner_count === 1 ? 'business' : 'businesses'}
                             bg="#EFF6FF"
-                            color="#2563EB"
                             icon={<Briefcase size={18} color="#2563EB" />}
                             items={data.businesses.owner.map((b) => ({
                                 key: b.business_id,
@@ -228,12 +313,11 @@ export default function UserProfile({ onClose }: Props) {
                             emptyLabel="Not an owner of any business yet."
                         />
 
-                        <ExpandableStatCard
+                        <ExpandableStatRow
                             label="Manager / Staff Roles"
                             value={data.businesses.manager_count + data.businesses.staff_count}
                             sub={`${data.businesses.manager_count} manager · ${data.businesses.staff_count} staff`}
                             bg="#F5F3FF"
-                            color="#7C3AED"
                             icon={<Users size={18} color="#7C3AED" />}
                             items={managerAndStaff.map((b) => ({
                                 key: b.business_id,
@@ -243,12 +327,11 @@ export default function UserProfile({ onClose }: Props) {
                             emptyLabel="Not a manager or staff member anywhere yet."
                         />
 
-                        <ExpandableStatCard
+                        <ExpandableStatRow
                             label="Receipts Submitted"
                             value={data.receipts.submitted_total}
                             sub="across all businesses"
                             bg="#F0FDF4"
-                            color="#16A34A"
                             icon={<ReceiptIcon size={18} color="#16A34A" />}
                             items={data.receipts.by_business.map((b) => ({
                                 key: b.business_id,
@@ -258,6 +341,50 @@ export default function UserProfile({ onClose }: Props) {
                             emptyLabel="No receipts submitted yet."
                         />
                     </View>
+
+                    <Text style={styles.sectionTitle}>Account</Text>
+                    <View style={styles.accountCard}>
+                        <AccountRow
+                            icon={<Shield size={18} color="#2563EB" />}
+                            bg="#EFF6FF"
+                            title="Security & Privacy"
+                            subtitle="Manage your security settings"
+                            onPress={goToPlaceholder}
+                        />
+                        <AccountRow
+                            icon={<Bell size={18} color="#7C3AED" />}
+                            bg="#F5F3FF"
+                            title="Notifications"
+                            subtitle="Manage notification preferences"
+                            onPress={goToPlaceholder}
+                        />
+                        <AccountRow
+                            icon={<HelpCircle size={18} color="#2563EB" />}
+                            bg="#EFF6FF"
+                            title="Help & Support"
+                            subtitle="Get help and contact support"
+                            onPress={goToPlaceholder}
+                        />
+                        <AccountRow
+                            icon={<Info size={18} color="#D97706" />}
+                            bg="#FEF3C7"
+                            title="About App"
+                            subtitle="Version 1.0.0"
+                            onPress={goToPlaceholder}
+                            isLast
+                        />
+                    </View>
+
+                    <TouchableOpacity activeOpacity={0.8} onPress={handleLogout} style={styles.logoutCard}>
+                        <View style={styles.logoutIconWrap}>
+                            <LogOut size={18} color="#DC2626" />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.logoutTitle}>Logout</Text>
+                            <Text style={styles.logoutSubtitle}>Sign out of your account</Text>
+                        </View>
+                        <ChevronRight size={18} color="#FCA5A5" />
+                    </TouchableOpacity>
                 </ScrollView>
             )}
         </View>
@@ -269,20 +396,30 @@ const styles = StyleSheet.create({
         width: '100%',
         flex: 1,
         backgroundColor: '#fff',
-        borderRadius: 16,
-        overflow: 'hidden',
     },
     header: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingTop: 20,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        paddingBottom: 16,
     },
-    headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+    headerTitle: { fontSize: 26, fontWeight: '800', color: '#111827' },
+    headerSubtitle: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    bellButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    bellBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 6,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#2563EB',
+        borderWidth: 1.5,
+        borderColor: '#fff',
+    },
     closeButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     loadingWrap: { paddingVertical: 48, alignItems: 'center', gap: 8 },
     loadingText: { fontSize: 13, color: '#9CA3AF' },
@@ -296,7 +433,16 @@ const styles = StyleSheet.create({
     },
     errorText: { fontSize: 12, color: '#DC2626' },
     body: { padding: 20, paddingBottom: 40 },
-    identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
+
+    identityCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        backgroundColor: '#EFF6FF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 20,
+    },
     avatar: {
         width: 56,
         height: 56,
@@ -308,16 +454,28 @@ const styles = StyleSheet.create({
     },
     avatarImg: { width: '100%', height: '100%' },
     avatarInitials: { color: '#2563EB', fontSize: 16, fontWeight: '600' },
-    userName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-    userEmail: { fontSize: 12, color: '#9CA3AF' },
-    userJoined: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
-    statsCol: { gap: 12 },
+    userName: { fontSize: 16, fontWeight: '700', color: '#111827' },
+    userEmail: { fontSize: 12, color: '#6B7280', marginTop: 1 },
+    userJoined: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
+    editButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#DBEAFE',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    statsCol: { gap: 12, marginBottom: 24 },
     statCard: { borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 16, padding: 16 },
-    statCardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-    statIconWrap: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-    statLabel: { fontSize: 11, color: '#9CA3AF', marginBottom: 4 },
+    statRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    statIconWrap: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    statTextCol: { flex: 1, minWidth: 0 },
+    statLabel: { fontSize: 12, color: '#6B7280', marginBottom: 2 },
     statValue: { fontSize: 20, fontWeight: '700', color: '#111827' },
-    statSub: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+    statSub: { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
     statDropdown: {
         marginTop: 12,
         borderTopWidth: 1,
@@ -335,4 +493,49 @@ const styles = StyleSheet.create({
     },
     statDropdownName: { flex: 1, fontSize: 12, fontWeight: '500', color: '#374151' },
     statDropdownMeta: { fontSize: 10, color: '#9CA3AF' },
+
+    sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 10 },
+    accountCard: {
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        borderRadius: 16,
+        marginBottom: 16,
+        overflow: 'hidden',
+    },
+    accountRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+    },
+    accountRowDivider: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    accountIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    accountTitle: { fontSize: 14, fontWeight: '600', color: '#111827' },
+    accountSubtitle: { fontSize: 11.5, color: '#9CA3AF', marginTop: 1 },
+
+    logoutCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        backgroundColor: '#FEF2F2',
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+    },
+    logoutIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logoutTitle: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
+    logoutSubtitle: { fontSize: 11.5, color: '#EF4444', marginTop: 1 },
 })
