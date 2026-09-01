@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { View, Text, Image, TouchableOpacity, StyleSheet, Platform } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Image, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path, Circle } from 'react-native-svg'
@@ -23,11 +23,12 @@ export type MainTabParamList = {
 const Tab = createBottomTabNavigator<MainTabParamList>()
 
 // --- Icons -----------------------------------------------------------
+// Bumped from 22 -> 26 to match the larger bar.
 
 function BusinessesIcon({ active }: { active: boolean }) {
     const color = active ? '#2563EB' : '#9CA3AF'
     return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
+        <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
             <Path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -40,7 +41,7 @@ function BusinessesIcon({ active }: { active: boolean }) {
 function DashboardIcon({ active }: { active: boolean }) {
     const color = active ? '#2563EB' : '#9CA3AF'
     return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
+        <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
             <Path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -53,7 +54,7 @@ function DashboardIcon({ active }: { active: boolean }) {
 function ScanIcon() {
     // Always white — this icon only ever sits on the raised blue button.
     return (
-        <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
+        <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
             <Path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -66,7 +67,7 @@ function ScanIcon() {
 function CreatorsIcon({ active }: { active: boolean }) {
     const color = active ? '#2563EB' : '#9CA3AF'
     return (
-        <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
+        <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={active ? 2 : 1.8}>
             <Path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -99,31 +100,73 @@ function ProfileIcon({
             {avatarUrl ? (
                 <Image source={{ uri: avatarUrl }} style={styles.profileAvatarImg} />
             ) : (
-                <Text style={styles.profileAvatarInitials}>{getInitials(name || '?')}</Text>
+                <Animated.Text style={styles.profileAvatarInitials}>{getInitials(name || '?')}</Animated.Text>
             )}
         </View>
+    )
+}
+
+// --- Animated wrapper ---------------------------------------------------
+// Scales the icon up slightly and gives it a quick jiggle (a few small
+// rotation oscillations) whenever its tab becomes the focused tab.
+
+function AnimatedTabIcon({ isFocused, children }: { isFocused: boolean; children: React.ReactNode }) {
+    const scale = useRef(new Animated.Value(1)).current
+    const rotate = useRef(new Animated.Value(0)).current
+
+    useEffect(() => {
+        if (isFocused) {
+            scale.setValue(1)
+            rotate.setValue(0)
+
+            Animated.parallel([
+                Animated.spring(scale, {
+                    toValue: 1.22,
+                    friction: 4,
+                    tension: 180,
+                    useNativeDriver: true,
+                }),
+                Animated.sequence([
+                    Animated.timing(rotate, { toValue: -1, duration: 60, useNativeDriver: true }),
+                    Animated.timing(rotate, { toValue: 1, duration: 60, useNativeDriver: true }),
+                    Animated.timing(rotate, { toValue: -0.6, duration: 60, useNativeDriver: true }),
+                    Animated.timing(rotate, { toValue: 0.6, duration: 60, useNativeDriver: true }),
+                    Animated.timing(rotate, { toValue: 0, duration: 60, useNativeDriver: true }),
+                ]),
+            ]).start()
+        } else {
+            Animated.spring(scale, {
+                toValue: 1,
+                friction: 5,
+                tension: 160,
+                useNativeDriver: true,
+            }).start()
+        }
+    }, [isFocused])
+
+    const rotateDeg = rotate.interpolate({
+        inputRange: [-1, 1],
+        outputRange: ['-8deg', '8deg'],
+    })
+
+    return (
+        <Animated.View style={{ transform: [{ scale }, { rotate: rotateDeg }] }}>
+            {children}
+        </Animated.View>
     )
 }
 
 // --- Custom tab bar ----------------------------------------------------
 // Renders Businesses / Dashboard / [raised Scan] / About the Creators /
 // Profile as a fixed row, matching the reference layout (home / stats /
-// raised scan / badge / history / profile).
-
-const TAB_LABELS: Record<string, string> = {
-    Businesses: 'Businesses',
-    Dashboard: 'Dashboard',
-    Scan: 'Scan',
-    ScanBulkUpload: 'Scan',
-    AboutTheCreators: 'About',
-    Profile: 'Profile',
-}
+// raised scan / badge / history / profile). Labels removed; bar and
+// icons enlarged; icons scale + jiggle on selection.
 
 function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
     const insets = useSafeAreaInsets()
 
     return (
-        <View style={[styles.barWrap, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.barWrap, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.bar}>
                 {state.routes.map((route: any, index: number) => {
                     const isFocused = state.index === index
@@ -166,10 +209,9 @@ function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
                                 style={styles.tabItem}
                                 accessibilityLabel="Profile"
                             >
-                                <ProfileIcon active={isFocused} avatarUrl={avatarUrl} name={name} />
-                                <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-                                    {TAB_LABELS[route.name]}
-                                </Text>
+                                <AnimatedTabIcon isFocused={isFocused}>
+                                    <ProfileIcon active={isFocused} avatarUrl={avatarUrl} name={name} />
+                                </AnimatedTabIcon>
                             </TouchableOpacity>
                         )
                     }
@@ -188,16 +230,24 @@ function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
                             style={styles.tabItem}
                             accessibilityLabel={TAB_LABELS[route.name]}
                         >
-                            <Icon active={isFocused} />
-                            <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-                                {TAB_LABELS[route.name]}
-                            </Text>
+                            <AnimatedTabIcon isFocused={isFocused}>
+                                <Icon active={isFocused} />
+                            </AnimatedTabIcon>
                         </TouchableOpacity>
                     )
                 })}
             </View>
         </View>
     )
+}
+
+const TAB_LABELS: Record<string, string> = {
+    Businesses: 'Businesses',
+    Dashboard: 'Dashboard',
+    Scan: 'Scan',
+    ScanBulkUpload: 'Scan',
+    AboutTheCreators: 'About',
+    Profile: 'Profile',
 }
 
 export default function MainTabs() {
@@ -256,41 +306,34 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderTopWidth: 1,
         borderTopColor: '#F3F4F6',
-        paddingTop: 10,
+        paddingTop: 16,
     },
     bar: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-around',
         paddingHorizontal: 8,
+        minHeight: 56,
     },
     tabItem: {
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 4,
-        minWidth: 56,
-    },
-    tabLabel: {
-        fontSize: 10.5,
-        fontWeight: '500',
-        color: '#9CA3AF',
-    },
-    tabLabelActive: {
-        color: '#2563EB',
+        minWidth: 60,
+        minHeight: 44,
     },
     scanSlot: {
         alignItems: 'center',
         justifyContent: 'flex-start',
-        width: 64,
+        width: 72,
     },
     scanButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: '#2563EB',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: -28,
+        marginTop: -32,
         shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
@@ -300,9 +343,9 @@ const styles = StyleSheet.create({
         borderColor: '#ffffff',
     },
     profileAvatar: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
         backgroundColor: '#DBEAFE',
         alignItems: 'center',
         justifyContent: 'center',
@@ -317,7 +360,7 @@ const styles = StyleSheet.create({
         height: '100%',
     },
     profileAvatarInitials: {
-        fontSize: 8,
+        fontSize: 9,
         fontWeight: '700',
         color: '#2563EB',
     },
