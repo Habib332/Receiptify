@@ -18,10 +18,10 @@ export default function UploadModeToggle({ mode }: UploadModeToggleProps) {
                     Single upload
                 </Text>
             </TouchableOpacity>
-           <TouchableOpacity
-    onPress={() => navigation.navigate('MainTabs', { screen: 'ScanBulkUpload' })}
-    style={[styles.button, mode === 'bulk' && styles.buttonActive]}
->
+            <TouchableOpacity
+                onPress={() => navigation.navigate('MainTabs', { screen: 'ScanBulkUpload' })}
+                style={[styles.button, mode === 'bulk' && styles.buttonActive]}
+            >
                 <Text style={[styles.buttonText, mode === 'bulk' ? styles.buttonTextActive : styles.buttonTextInactive]}>
                     Bulk upload
                 </Text>
@@ -34,8 +34,10 @@ const styles = StyleSheet.create({
     wrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: '#2563eb',
+        alignSelf: 'center',
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#2563eb',
         borderRadius: 999,
         padding: 4,
     },
@@ -43,18 +45,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 999,
+        backgroundColor: 'transparent',
     },
     buttonActive: {
-        backgroundColor: '#ffffff',
+        backgroundColor: '#2563eb',
     },
     buttonText: {
         fontSize: 14,
         fontWeight: '600',
     },
     buttonTextActive: {
-        color: '#2563eb',
+        color: '#ffffff',
     },
     buttonTextInactive: {
-        color: '#ffffff',
+        color: '#2563eb',
     },
 })
