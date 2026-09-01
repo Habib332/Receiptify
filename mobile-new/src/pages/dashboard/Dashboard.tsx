@@ -5,6 +5,7 @@ import {
     TextInput,
     TouchableOpacity,
     Image,
+    ImageBackground,
     ScrollView,
     ActivityIndicator,
     Modal,
@@ -158,8 +159,8 @@ export default function Dashboard() {
     // React Navigation's equivalent is a route param instead of router state.
     const route = useRoute<Route>()
     const businessIdFromNavigation = (route.params as DashboardRouteParams | undefined)?.businessId
-        const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>()
-        
+    const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>()
+
     const [receipts, setReceipts] = useState<Receipt[]>([])
     const [allReceipts, setAllReceipts] = useState<Receipt[]>([])
     const [stats, setStats] = useState<Stats | null>(null)
@@ -743,25 +744,29 @@ export default function Dashboard() {
                 )}
 
                 {/* Hero banner */}
-                <View style={styles.hero}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.heroTitle}>
-                            All your receipts,{'\n'}
-                            <Text style={styles.heroTitleAccent}>organized.</Text>
-                        </Text>
-                        <Text style={styles.heroSub}>
-                            Keep track of every expense with ease. Search, filter and export your receipt data anytime.
-                        </Text>
-                        <TouchableOpacity
-                            onPress={() => navigation.navigate('Scan')}
-                            style={styles.heroButton}
-                        >
-                            <Plus size={16} color="#2563EB" />
-                            <Text style={styles.heroButtonText}>Upload Receipt</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <Image source={DashboardHeroImage} style={styles.heroImage} resizeMode="contain" />
-                </View>
+<ImageBackground
+    source={DashboardHeroImage}
+    style={styles.hero}
+    imageStyle={styles.heroImageBg}
+    resizeMode="cover"
+>
+    <View style={{ flex: 1 }}>
+        <Text style={styles.heroTitle}>
+            All your receipts,{'\n'}
+            <Text style={styles.heroTitleAccent}>organized.</Text>
+        </Text>
+        <Text style={styles.heroSub}>
+            Keep track of every expense with ease. Search, filter and export your receipt data anytime.
+        </Text>
+        <TouchableOpacity
+            onPress={() => navigation.navigate('Scan')}
+            style={styles.heroButton}
+        >
+            <Plus size={16} color="#2563EB" />
+            <Text style={styles.heroButtonText}>Upload Receipt</Text>
+        </TouchableOpacity>
+    </View>
+</ImageBackground>
 
                 {/* Stats */}
                 <View style={styles.statsRow}>
@@ -1290,16 +1295,13 @@ const styles = StyleSheet.create({
     // extra dependency, so this uses a solid deep blue that matches the
     // gradient's dominant tone; swap for expo-linear-gradient if/when
     // that dependency is available in this project.
-    hero: {
-        backgroundColor: '#1E3A8A',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 20,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        overflow: 'hidden',
-    },
+   hero: {
+    backgroundColor: '#2563EB',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    overflow: 'hidden',
+},
     heroTitle: { fontSize: 20, fontWeight: '700', color: '#fff', lineHeight: 26, marginBottom: 10 },
     heroTitleAccent: { color: '#60A5FA' },
     heroSub: { fontSize: 13, color: '#BFDBFE', marginBottom: 16, lineHeight: 18 },
@@ -1315,7 +1317,10 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     heroButtonText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
-    heroImage: { width: 96, height: 96, borderRadius: 12 },
+    heroImageBg: {
+    borderRadius: 20,
+    opacity: 0.15,
+},
 
     statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, alignItems: 'stretch' },
     statCard: {

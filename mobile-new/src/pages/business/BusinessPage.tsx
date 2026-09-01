@@ -8,6 +8,7 @@ import {
     ScrollView,
     Image,
     Dimensions,
+    ImageBackground,
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -614,25 +615,26 @@ export default function BusinessPage() {
                 {error !== '' && <Text style={styles.errorBanner}>{error}</Text>}
 
                 {/* Hero banner */}
-                <View style={[styles.hero, isWide && styles.heroWide]}>
-                    <View style={styles.heroText}>
-                        <Text style={styles.heroTitle}>
-                            All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
-                        </Text>
-                        <Text style={styles.heroSubtitle}>
-                            Search, manage, and keep track of all your businesses in one place.
-                        </Text>
-                        <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
-                            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
-                            <Text style={styles.heroButtonText}>Add Business</Text>
-                        </TouchableOpacity>
-                    </View>
-                    {isWide && (
-                        <View style={styles.heroImageWrap}>
-                            <Image source={BusinessHeroImage} style={styles.heroImage} resizeMode="contain" />
-                        </View>
-                    )}
-                </View>
+<ImageBackground
+    source={BusinessHeroImage}
+    style={styles.hero}
+    imageStyle={styles.heroImageBg}
+    resizeMode="cover"
+>
+    <View style={styles.heroText}>
+        <Text style={styles.heroTitle}>
+            All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
+        </Text>
+        <Text style={styles.heroSubtitle}>
+            Search, manage, and keep track of all your businesses in one place.
+        </Text>
+        <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
+            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
+            <Text style={styles.heroButtonText}>Add Business</Text>
+        </TouchableOpacity>
+    </View>
+</ImageBackground>
+                
 
                 {/* Overview */}
                 <View style={styles.statsGrid}>
@@ -933,13 +935,16 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     hero: {
-        backgroundColor: colors.blue50,
-        borderRadius: 16,
-        paddingHorizontal: 20,
-        paddingVertical: 24,
-        marginBottom: 24,
-        gap: 20,
-    },
+    backgroundColor: colors.blue600,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+    overflow: 'hidden',
+},
+heroImageBg: {
+    borderRadius: 20,
+    opacity: 0.15,
+},
     heroWide: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -949,35 +954,35 @@ const styles = StyleSheet.create({
         maxWidth: 384,
     },
     heroTitle: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: colors.gray900,
-    },
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.white,
+},
     heroTitleAccent: {
-        color: colors.blue600,
-    },
-    heroSubtitle: {
-        fontSize: 14,
-        color: colors.gray500,
-        marginTop: 8,
-        marginBottom: 20,
-    },
-    heroButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        alignSelf: 'flex-start',
-        backgroundColor: colors.blue600,
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        minHeight: 44,
-        justifyContent: 'center',
-    },
-    heroButtonText: {
-        color: colors.white,
-        fontSize: 14,
-        fontWeight: '600',
-    },
+    color: colors.blue200 ?? '#BFDBFE',
+},
+heroSubtitle: {
+    fontSize: 14,
+    color: colors.blue100 ?? '#DBEAFE',
+    marginTop: 8,
+    marginBottom: 20,
+},
+heroButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    minHeight: 44,
+    justifyContent: 'center',
+},
+heroButtonText: {
+    color: colors.blue600,
+    fontSize: 14,
+    fontWeight: '600',
+},
     heroImageWrap: {
         width: 320,
         height: 224,
