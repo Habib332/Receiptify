@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Path, Rect } from 'react-native-svg'
 import Layout from '../../components/Layout'
 import UploadModeToggle from './UploadModeToggle'
 import BusinessSelector, { type BusinessOption } from '../dashboard/BusinessSelector'
@@ -64,6 +64,32 @@ interface BulkResult {
     failed: number
     total: number
     receipts: Receipt[] // requires the backend change noted below
+}
+
+// Small header illustration — stacked documents with a cloud-upload
+// badge, matching the single-upload screen's phone illustration for
+// visual consistency between the two modes.
+function BulkHeaderIllustration() {
+    return (
+        <View style={styles.headerIllustration}>
+            <Svg width={40} height={40} viewBox="0 0 40 40" fill="none">
+                <Rect x={6} y={10} width={22} height={26} rx={3} fill="#EFF6FF" stroke="#BFDBFE" strokeWidth={1.5} />
+                <Rect x={11} y={5} width={22} height={26} rx={3} fill="#FFFFFF" stroke="#DBEAFE" strokeWidth={1.5} />
+                <Rect x={15} y={11} width={14} height={2} rx={1} fill="#93C5FD" />
+                <Rect x={15} y={16} width={10} height={2} rx={1} fill="#DBEAFE" />
+                <Rect x={15} y={20} width={10} height={2} rx={1} fill="#DBEAFE" />
+            </Svg>
+            <View style={styles.headerBadge}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                    <Path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
+                    />
+                </Svg>
+            </View>
+        </View>
+    )
 }
 
 export default function ScanBulkUpload() {
@@ -253,11 +279,14 @@ export default function ScanBulkUpload() {
     return (
         <Layout>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Bulk upload receipts</Text>
-                <Text style={styles.subtitle}>
-                    Upload multiple receipt images at once — we'll read each one automatically.
-                </Text>
+            <View style={styles.headerRow}>
+                <View style={styles.headerText}>
+                    <Text style={styles.title}>Bulk upload receipts</Text>
+                    <Text style={styles.subtitle}>
+                        Upload multiple receipt images at once — we'll read each one automatically.
+                    </Text>
+                </View>
+                <BulkHeaderIllustration />
             </View>
 
             {/* Upload mode toggle */}
@@ -399,9 +428,39 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 40,
     },
-    
-    header: {
+
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: 24,
+    },
+    headerText: {
+        flex: 1,
+        paddingRight: 12,
+    },
+    headerIllustration: {
+        width: 64,
+        height: 64,
+        borderRadius: 16,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerBadge: {
+        position: 'absolute',
+        bottom: -4,
+        right: -4,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#2563EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#ffffff',
     },
     title: {
         fontSize: 22,

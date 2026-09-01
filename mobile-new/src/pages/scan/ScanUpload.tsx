@@ -11,7 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
-import Svg, { Path, Circle } from 'react-native-svg'
+import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import Layout from '../../components/Layout'
 import UploadModeToggle from './UploadModeToggle'
 import BusinessSelector, { type BusinessOption } from '../dashboard/BusinessSelector'
@@ -48,6 +48,105 @@ interface PickedImage {
     uri: string
     name: string
     mimeType: string
+}
+
+// Small header illustration — phone with a camera badge, matching the
+// bulk-upload screen's cloud illustration for visual consistency.
+function ScanHeaderIllustration() {
+    return (
+        <View style={styles.headerIllustration}>
+            <Svg width={40} height={40} viewBox="0 0 40 40" fill="none">
+                <Rect x={9} y={2} width={20} height={34} rx={4} fill="#EFF6FF" stroke="#BFDBFE" strokeWidth={1.5} />
+                <Rect x={13} y={8} width={12} height={2} rx={1} fill="#93C5FD" />
+                <Rect x={13} y={13} width={9} height={2} rx={1} fill="#DBEAFE" />
+                <Rect x={13} y={17} width={9} height={2} rx={1} fill="#DBEAFE" />
+                <Rect x={13} y={21} width={6} height={2} rx={1} fill="#DBEAFE" />
+            </Svg>
+            <View style={styles.headerBadge}>
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                    <Path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38 0-.753-.116-1.076-.334a2.32 2.32 0 01-.734-.847 2.29 2.29 0 01-.239-1.089 2.31 2.31 0 01.334-1.076c.19-.319.462-.573.79-.734a2.29 2.29 0 011.089-.239h13.42a2.29 2.29 0 011.089.239c.328.161.6.415.79.734.19.319.316.68.334 1.076a2.29 2.29 0 01-.239 1.089 2.32 2.32 0 01-.734.847 2.31 2.31 0 01-1.076.334 2.31 2.31 0 01-1.641-1.055M6.827 6.175L3.75 20.25h16.5L17.173 6.175M6.827 6.175h10.346"
+                    />
+                    <Circle cx={12} cy={13} r={2.75} />
+                </Svg>
+            </View>
+        </View>
+    )
+}
+
+// Icons used in the "why scan" feature rows below the upload area.
+function BoltIcon() {
+    return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth={1.8}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+            />
+        </Svg>
+    )
+}
+
+function ShieldCheckIcon() {
+    return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth={1.8}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.286z"
+            />
+        </Svg>
+    )
+}
+
+function LockIcon() {
+    return (
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth={1.8}>
+            <Path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+            />
+        </Svg>
+    )
+}
+
+// "Why scan" feature rows shown below the upload area — matches the
+// three info rows in the design (auto-scan, accuracy, security).
+function ScanFeatureList() {
+    const items = [
+        {
+            icon: <BoltIcon />,
+            title: 'Auto-scan & extract',
+            description: "We'll automatically read the details from your receipt.",
+        },
+        {
+            icon: <ShieldCheckIcon />,
+            title: 'Accurate & fast',
+            description: 'Our AI ensures high accuracy and saves you time.',
+        },
+        {
+            icon: <LockIcon />,
+            title: '100% secure',
+            description: 'Your data is private and always protected.',
+        },
+    ]
+
+    return (
+        <View style={styles.featuresWrap}>
+            {items.map((item) => (
+                <View key={item.title} style={styles.featureRow}>
+                    <View style={styles.featureIconBox}>{item.icon}</View>
+                    <View style={styles.featureTextWrap}>
+                        <Text style={styles.featureTitle}>{item.title}</Text>
+                        <Text style={styles.featureDescription}>{item.description}</Text>
+                    </View>
+                </View>
+            ))}
+        </View>
+    )
 }
 
 export default function ScanUpload() {
@@ -263,9 +362,12 @@ export default function ScanUpload() {
     return (
         <Layout>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Scan a receipt</Text>
-                <Text style={styles.subtitle}>Upload a photo or take a picture to get started.</Text>
+            <View style={styles.headerRow}>
+                <View style={styles.headerText}>
+                    <Text style={styles.title}>Scan a receipt</Text>
+                    <Text style={styles.subtitle}>Upload a photo or take a picture to get started.</Text>
+                </View>
+                <ScanHeaderIllustration />
             </View>
 
             {/* Upload mode toggle */}
@@ -324,7 +426,7 @@ export default function ScanUpload() {
                         </Svg>
                     </View>
                     <Text style={styles.dropzoneTitle}>Add your receipt</Text>
-                    <Text style={styles.dropzoneSubtitle}>Choose an option below · JPG, PNG up to 10MB</Text>
+                    <Text style={styles.dropzoneSubtitle}>Choose an option below. JPG, PNG up to 10MB.</Text>
 
                     <View style={styles.dropzoneButtons}>
                         <TouchableOpacity onPress={pickFromLibrary} style={styles.primaryButton}>
@@ -376,6 +478,9 @@ export default function ScanUpload() {
                     </TouchableOpacity>
                 </View>
             )}
+
+            {/* Why scan — matches the info rows in the design */}
+            <ScanFeatureList />
             </ScrollView>
         </Layout>
     )
@@ -386,9 +491,39 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 40,
     },
-    
-    header: {
+
+    headerRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: 24,
+    },
+    headerText: {
+        flex: 1,
+        paddingRight: 12,
+    },
+    headerIllustration: {
+        width: 64,
+        height: 64,
+        borderRadius: 16,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerBadge: {
+        position: 'absolute',
+        bottom: -4,
+        right: -4,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#2563EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#ffffff',
     },
     title: {
         fontSize: 22,
@@ -598,5 +733,38 @@ const styles = StyleSheet.create({
         color: '#ffffff',
         fontSize: 14,
         fontWeight: '600',
+    },
+
+    // "Why scan" feature rows
+    featuresWrap: {
+        marginTop: 24,
+        gap: 20,
+    },
+    featureRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
+    },
+    featureIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: '#eff6ff',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    featureTextWrap: {
+        flex: 1,
+    },
+    featureTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#111827',
+        marginBottom: 2,
+    },
+    featureDescription: {
+        fontSize: 12,
+        color: '#9ca3af',
+        lineHeight: 17,
     },
 })
