@@ -5,13 +5,14 @@ import {
     TextInput,
     TouchableOpacity,
     StyleSheet,
-    ScrollView,
     Image,
     Dimensions,
     ImageBackground,
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Bell } from 'lucide-react-native'
 import Layout from '../../components/Layout'
 import { getBusinessIcon, businessTypes } from './BusinessIcons'
 import AddBusinessModal from './AddBusinessModal'
@@ -109,6 +110,7 @@ const screenWidth = Dimensions.get('window').width
 const isWide = screenWidth >= 768
 
 export default function BusinessPage() {
+    const insets = useSafeAreaInsets()
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>()
     const [businesses, setBusinesses] = useState<Business[]>([])
     const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -582,59 +584,52 @@ export default function BusinessPage() {
     ]
 
     return (
-        <Layout>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.headerRow}>
-                    <View>
-                        <Text style={styles.pageTitle}>Businesses</Text>
-                        <Text style={styles.pageSubtitle}>Manage all your saved businesses in one place.</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.bellButton}
-                        onPress={() => {
-                            setShowNotifications(true)
-                            fetchNotifications()
-                        }}
-                    >
-                        <Icon
-                            d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
-                            size={20}
-                            color={colors.gray400}
-                            strokeWidth={1.8}
-                        />
-                        {unreadNotificationCount > 0 && (
-                            <View style={styles.badge}>
-                                <Text style={styles.badgeText}>
-                                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                                </Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+        <View style={styles.screen}>
+            {/* Pinned header: sits outside Layout's internal ScrollView, so
+                it stays fixed while Layout's children (everything below)
+                scroll underneath it. Mirrors UserProfileModal's header. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
+                <View>
+                    <Text style={styles.pageTitle}>Businesses</Text>
+                    <Text style={styles.pageSubtitle}>Manage all your saved businesses in one place.</Text>
                 </View>
+                <TouchableOpacity
+                    style={styles.bellButton}
+                    onPress={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                >
+                    <Bell size={20} color={colors.gray400} strokeWidth={1.8} />
+                    {unreadNotificationCount > 0 && (
+                        <View style={styles.bellBadge} />
+                    )}
+                </TouchableOpacity>
+            </View>
 
+            <Layout>
                 {error !== '' && <Text style={styles.errorBanner}>{error}</Text>}
 
                 {/* Hero banner */}
-<ImageBackground
-    source={BusinessHeroImage}
-    style={styles.hero}
-    imageStyle={styles.heroImageBg}
-    resizeMode="cover"
->
-    <View style={styles.heroText}>
-        <Text style={styles.heroTitle}>
-            All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
-        </Text>
-        <Text style={styles.heroSubtitle}>
-            Search, manage, and keep track of all your businesses in one place.
-        </Text>
-        <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
-            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
-            <Text style={styles.heroButtonText}>Add Business</Text>
-        </TouchableOpacity>
-    </View>
-</ImageBackground>
-                
+                <ImageBackground
+                    source={BusinessHeroImage}
+                    style={styles.hero}
+                    imageStyle={styles.heroImageBg}
+                    resizeMode="cover"
+                >
+                    <View style={styles.heroText}>
+                        <Text style={styles.heroTitle}>
+                            All your businesses, <Text style={styles.heroTitleAccent}>organized</Text>.
+                        </Text>
+                        <Text style={styles.heroSubtitle}>
+                            Search, manage, and keep track of all your businesses in one place.
+                        </Text>
+                        <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
+                            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
+                            <Text style={styles.heroButtonText}>Add Business</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ImageBackground>
 
                 {/* Overview */}
                 <View style={styles.statsGrid}>
@@ -787,7 +782,7 @@ export default function BusinessPage() {
                         </Text>
                     </View>
                 </View>
-            </ScrollView>
+            </Layout>
 
             {showAddModal && (
                 <AddBusinessModal onClose={() => setShowAddModal(false)} onSave={handleAddBusiness} />
@@ -875,20 +870,24 @@ export default function BusinessPage() {
                     onJoin={setJoiningBusiness}
                 />
             )}
-        </Layout>
+        </View>
     )
 }
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
+    screen: {
+        flex: 1,
+        backgroundColor: colors.white,
     },
     headerRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        marginBottom: 24,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        backgroundColor: colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.gray100,
     },
     pageTitle: {
         fontSize: 24,
@@ -900,24 +899,18 @@ const styles = StyleSheet.create({
         color: colors.gray400,
         marginTop: 4,
     },
-    bellButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    badge: {
+    
+    bellButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    bellBadge: {
         position: 'absolute',
         top: 4,
         right: 6,
-        minWidth: 14,
-        height: 14,
-        paddingHorizontal: 2,
-        borderRadius: 7,
-        backgroundColor: colors.red500,
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#2563EB',
+        borderWidth: 1.5,
+        borderColor: '#fff',
     },
     badgeText: {
         fontSize: 9,
@@ -935,16 +928,16 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
     },
     hero: {
-    backgroundColor: colors.blue600,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 24,
-    overflow: 'hidden',
-},
-heroImageBg: {
-    borderRadius: 20,
-    opacity: 0.15,
-},
+        backgroundColor: colors.blue600,
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 24,
+        overflow: 'hidden',
+    },
+    heroImageBg: {
+        borderRadius: 20,
+        opacity: 0.15,
+    },
     heroWide: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -954,35 +947,35 @@ heroImageBg: {
         maxWidth: 384,
     },
     heroTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.white,
-},
+        fontSize: 22,
+        fontWeight: '700',
+        color: colors.white,
+    },
     heroTitleAccent: {
-    color: colors.blue200 ?? '#BFDBFE',
-},
-heroSubtitle: {
-    fontSize: 14,
-    color: colors.blue100 ?? '#DBEAFE',
-    marginTop: 8,
-    marginBottom: 20,
-},
-heroButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    minHeight: 44,
-    justifyContent: 'center',
-},
-heroButtonText: {
-    color: colors.blue600,
-    fontSize: 14,
-    fontWeight: '600',
-},
+        color: colors.blue200 ?? '#BFDBFE',
+    },
+    heroSubtitle: {
+        fontSize: 14,
+        color: colors.blue100 ?? '#DBEAFE',
+        marginTop: 8,
+        marginBottom: 20,
+    },
+    heroButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        alignSelf: 'flex-start',
+        backgroundColor: colors.white,
+        borderRadius: 10,
+        paddingHorizontal: 16,
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    heroButtonText: {
+        color: colors.blue600,
+        fontSize: 14,
+        fontWeight: '600',
+    },
     heroImageWrap: {
         width: 320,
         height: 224,
@@ -1035,33 +1028,33 @@ heroButtonText: {
         marginTop: 4,
     },
     controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-},
-searchBox: {
-    flex: 7, // takes all remaining space
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    minHeight: 44,
-    minWidth: 0,
-},
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 16,
+    },
+    searchBox: {
+        flex: 7, // takes all remaining space
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: colors.gray200,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        minHeight: 44,
+        minWidth: 0,
+    },
     searchInput: {
         flex: 1,
         fontSize: 14,
         color: colors.gray700,
     },
-filterButtonWrap: {
-    flex: 3,
-    minHeight: 44,
-    minWidth: 0,
-},
+    filterButtonWrap: {
+        flex: 3,
+        minHeight: 44,
+        minWidth: 0,
+    },
     toggleWrap: {
         marginBottom: 16,
     },

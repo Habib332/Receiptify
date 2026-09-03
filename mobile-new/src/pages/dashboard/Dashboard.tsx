@@ -18,6 +18,7 @@ import * as FileSystem from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
 import { useRoute, useFocusEffect, useNavigation, type RouteProp } from '@react-navigation/native'
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MainTabParamList } from '../../components/MainTabs'
 import {
     Bell,
@@ -155,6 +156,8 @@ type DashboardRouteParams = {
 type Route = RouteProp<MainTabParamList, 'Dashboard'>
 
 export default function Dashboard() {
+    const insets = useSafeAreaInsets()
+
     // Web read this from react-router's navigate('/dashboard', { state: { businessId } }).
     // React Navigation's equivalent is a route param instead of router state.
     const route = useRoute<Route>()
@@ -712,31 +715,35 @@ export default function Dashboard() {
     const isEmpty = !loading && !switchingBusiness && receipts.length === 0
 
     return (
-        <Layout>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.headerRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.h1}>Receipts</Text>
-                        <Text style={styles.h1Sub}>View, search and manage all your scanned receipts.</Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={() => {
-                            setShowNotifications(true)
-                            fetchNotifications()
-                        }}
-                        style={styles.bellButton}
-                    >
-                        <Bell size={20} color="#9CA3AF" />
-                        {unreadNotificationCount > 0 && (
-                            <View style={styles.bellBadge}>
-                                <Text style={styles.bellBadgeText}>
-                                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                                </Text>
-                            </View>
-                        )}
-                    </TouchableOpacity>
+        <View style={styles.screen}>
+            {/* Pinned header: sits outside Layout's internal ScrollView, so
+                it stays fixed while Layout's children (everything below)
+                scroll underneath it. Mirrors UserProfileModal's header,
+                including the safe-area top inset. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.h1}>Receipts</Text>
+                    <Text style={styles.h1Sub}>View, search and manage all your scanned receipts.</Text>
                 </View>
+                <TouchableOpacity
+                    onPress={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                    style={styles.bellButton}
+                >
+                    <Bell size={20} color="#9CA3AF" />
+                    {unreadNotificationCount > 0 && (
+                        <View style={styles.bellBadge}>
+                            <Text style={styles.bellBadgeText}>
+                                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                            </Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
+            </View>
 
+            <Layout>
                 {!!error && (
                     <View style={styles.errorBox}>
                         <Text style={styles.errorText}>{error}</Text>
@@ -744,29 +751,29 @@ export default function Dashboard() {
                 )}
 
                 {/* Hero banner */}
-<ImageBackground
-    source={DashboardHeroImage}
-    style={styles.hero}
-    imageStyle={styles.heroImageBg}
-    resizeMode="cover"
->
-    <View style={{ flex: 1 }}>
-        <Text style={styles.heroTitle}>
-            All your receipts,{'\n'}
-            <Text style={styles.heroTitleAccent}>organized.</Text>
-        </Text>
-        <Text style={styles.heroSub}>
-            Keep track of every expense with ease. Search, filter and export your receipt data anytime.
-        </Text>
-        <TouchableOpacity
-            onPress={() => navigation.navigate('Scan')}
-            style={styles.heroButton}
-        >
-            <Plus size={16} color="#2563EB" />
-            <Text style={styles.heroButtonText}>Upload Receipt</Text>
-        </TouchableOpacity>
-    </View>
-</ImageBackground>
+                <ImageBackground
+                    source={DashboardHeroImage}
+                    style={styles.hero}
+                    imageStyle={styles.heroImageBg}
+                    resizeMode="cover"
+                >
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.heroTitle}>
+                            All your receipts,{'\n'}
+                            <Text style={styles.heroTitleAccent}>organized.</Text>
+                        </Text>
+                        <Text style={styles.heroSub}>
+                            Keep track of every expense with ease. Search, filter and export your receipt data anytime.
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('Scan')}
+                            style={styles.heroButton}
+                        >
+                            <Plus size={16} color="#2563EB" />
+                            <Text style={styles.heroButtonText}>Upload Receipt</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ImageBackground>
 
                 {/* Stats */}
                 <View style={styles.statsRow}>
@@ -1129,7 +1136,7 @@ export default function Dashboard() {
                         </View>
                     </View>
                 )}
-            </ScrollView>
+            </Layout>
 
             {deletingReceipt && (
                 <DeleteReceiptModal
@@ -1163,7 +1170,7 @@ export default function Dashboard() {
                     onDecisionMade={handleNotificationDecisionMade}
                 />
             )}
-        </Layout>
+        </View>
     )
 }
 
@@ -1258,12 +1265,21 @@ const COL = StyleSheet.create({
 })
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
+    screen: {
+        flex: 1,
+        backgroundColor: '#fff',
     },
 
-    headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 },
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
     h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
     h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
     bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
