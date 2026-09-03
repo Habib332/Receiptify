@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Path, Rect } from 'react-native-svg'
 import Layout from '../../components/Layout'
@@ -94,6 +95,7 @@ function BulkHeaderIllustration() {
 
 export default function ScanBulkUpload() {
     const navigation = useNavigation<any>()
+    const insets = useSafeAreaInsets()
 
     const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
     const [error, setError] = useState('')
@@ -277,9 +279,11 @@ export default function ScanBulkUpload() {
     }
 
     return (
-        <Layout>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.headerRow}>
+        <View style={styles.screen}>
+            {/* Pinned header: sits outside Layout's internal ScrollView, so
+                it stays fixed while Layout's children scroll underneath it.
+                Mirrors BusinessPage/UserProfileModal's header pattern. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
                 <View style={styles.headerText}>
                     <Text style={styles.title}>Bulk upload receipts</Text>
                     <Text style={styles.subtitle}>
@@ -289,6 +293,7 @@ export default function ScanBulkUpload() {
                 <BulkHeaderIllustration />
             </View>
 
+            <Layout>
             {/* Upload mode toggle */}
             <View style={styles.toggleWrap}>
                 <UploadModeToggle mode="bulk" />
@@ -418,22 +423,26 @@ export default function ScanBulkUpload() {
                     </TouchableOpacity>
                 </View>
             )}
-            </ScrollView>
-        </Layout>
+            </Layout>
+        </View>
     )
 }
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
+    screen: {
+        flex: 1,
+        backgroundColor: '#ffffff',
     },
 
     headerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 24,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        backgroundColor: '#ffffff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
     },
     headerText: {
         flex: 1,

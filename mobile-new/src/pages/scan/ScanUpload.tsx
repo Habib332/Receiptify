@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
 import Layout from '../../components/Layout'
@@ -113,44 +114,9 @@ function LockIcon() {
     )
 }
 
-// "Why scan" feature rows shown below the upload area — matches the
-// three info rows in the design (auto-scan, accuracy, security).
-function ScanFeatureList() {
-    const items = [
-        {
-            icon: <BoltIcon />,
-            title: 'Auto-scan & extract',
-            description: "We'll automatically read the details from your receipt.",
-        },
-        {
-            icon: <ShieldCheckIcon />,
-            title: 'Accurate & fast',
-            description: 'Our AI ensures high accuracy and saves you time.',
-        },
-        {
-            icon: <LockIcon />,
-            title: '100% secure',
-            description: 'Your data is private and always protected.',
-        },
-    ]
-
-    return (
-        <View style={styles.featuresWrap}>
-            {items.map((item) => (
-                <View key={item.title} style={styles.featureRow}>
-                    <View style={styles.featureIconBox}>{item.icon}</View>
-                    <View style={styles.featureTextWrap}>
-                        <Text style={styles.featureTitle}>{item.title}</Text>
-                        <Text style={styles.featureDescription}>{item.description}</Text>
-                    </View>
-                </View>
-            ))}
-        </View>
-    )
-}
-
 export default function ScanUpload() {
     const navigation = useNavigation<any>()
+    const insets = useSafeAreaInsets()
 
     const [preview, setPreview] = useState<string | null>(null)
     const [image, setImage] = useState<PickedImage | null>(null)
@@ -360,9 +326,11 @@ export default function ScanUpload() {
     }
 
     return (
-        <Layout>
-            <ScrollView contentContainerStyle={styles.scrollContent}>
-            <View style={styles.headerRow}>
+        <View style={styles.screen}>
+            {/* Pinned header: sits outside Layout's internal ScrollView, so
+                it stays fixed while Layout's children scroll underneath it.
+                Mirrors BusinessPage/UserProfileModal's header pattern. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
                 <View style={styles.headerText}>
                     <Text style={styles.title}>Scan a receipt</Text>
                     <Text style={styles.subtitle}>Upload a photo or take a picture to get started.</Text>
@@ -370,6 +338,7 @@ export default function ScanUpload() {
                 <ScanHeaderIllustration />
             </View>
 
+            <Layout>
             {/* Upload mode toggle */}
             <View style={styles.toggleWrap}>
                 <UploadModeToggle mode="single" />
@@ -478,25 +447,26 @@ export default function ScanUpload() {
                     </TouchableOpacity>
                 </View>
             )}
-
-            {/* Why scan — matches the info rows in the design */}
-            <ScanFeatureList />
-            </ScrollView>
-        </Layout>
+            </Layout>
+        </View>
     )
 }
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
+    screen: {
+        flex: 1,
+        backgroundColor: '#ffffff',
     },
 
     headerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 24,
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        backgroundColor: '#ffffff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
     },
     headerText: {
         flex: 1,
