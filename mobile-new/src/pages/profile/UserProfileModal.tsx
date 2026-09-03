@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
     View,
     Text,
@@ -19,7 +19,6 @@ import {
     Users,
     Receipt as ReceiptIcon,
     Bell,
-    Pencil,
     Shield,
     HelpCircle,
     Info,
@@ -27,6 +26,7 @@ import {
 } from 'lucide-react-native'
 import { API_BASE_URL, authHeaders } from '../../api/config'
 import type { MainTabParamList } from '../../components/MainTabs'
+import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
 
 type BusinessEntry = {
     business_id: number
@@ -185,36 +185,134 @@ export default function UserProfileModal({ onClose }: Props) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
-    useEffect(() => {
-        let cancelled = false
+    // --- Notifications: same fetch/poll/mark-read/decision pattern as
+    // Dashboard, so the bell here behaves identically. ---
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [notifications, setNotifications] = useState<NotificationItem[]>([])
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
 
-        async function fetchProfile() {
-            try {
-                setLoading(true)
-                const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
-                    method: 'GET',
-                    headers: await authHeaders(),
-                })
-
-                const json = await res.json()
-
-                if (!res.ok || !json.success) {
-                    throw new Error(json.message || 'Failed to load profile')
-                }
-
-                if (!cancelled) setData(json.data)
-            } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load profile')
-            } finally {
-                if (!cancelled) setLoading(false)
+    const fetchNotifications = useCallback(async () => {
+        setNotificationsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications`, {
+                method: 'GET',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load notifications')
             }
-        }
-
-        fetchProfile()
-        return () => {
-            cancelled = true
+            setNotifications(
+                (data.data || []).map((n: any) => ({
+                    ...n,
+                    id: n.id ?? n.notification_id,
+                    businessName: n.businessName ?? n.business_name ?? null,
+                    actorName: n.actorName ?? n.actor_name ?? null,
+                    actorEmail: n.actorEmail ?? n.actor_email ?? null,
+                    createdAt: n.createdAt ?? n.created_at,
+                    read: n.read ?? n.is_read ?? false,
+                }))
+            )
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setNotificationsLoading(false)
         }
     }, [])
+
+    const handleMarkNotificationRead = async (id: string) => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notification as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleMarkAllNotificationsRead = async () => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => ({ ...n, read: true })))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notifications as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    // Dashboard refetches receipts/stats after a join-request decision;
+    // here there's no receipts list on screen, so just refresh the
+    // notification list and the profile counts (a decision can change
+    // e.g. staff/manager counts) instead.
+    const handleNotificationDecisionMade = async (notificationId: string, decision: 'approve' | 'reject') => {
+        setNotifications((prev) =>
+            prev.map((n) =>
+                n.id === notificationId && n.joinRequest
+                    ? {
+                        ...n,
+                        read: true,
+                        joinRequest: {
+                            ...n.joinRequest,
+                            status: decision === 'approve' ? 'approved' : 'rejected',
+                        },
+                    }
+                    : n
+            )
+        )
+        fetchProfile()
+    }
+
+    // Load notifications on mount and poll periodically so the bell badge
+    // stays current even if the user leaves the screen open idle.
+    useEffect(() => {
+        fetchNotifications()
+        const interval = setInterval(fetchNotifications, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifications])
+
+    const unreadNotificationCount = notifications.filter((n) => !n.read).length
+
+    const fetchProfile = useCallback(async () => {
+        try {
+            setLoading(true)
+            const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
+                method: 'GET',
+                headers: await authHeaders(),
+            })
+
+            const json = await res.json()
+
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'Failed to load profile')
+            }
+
+            setData(json.data)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load profile')
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        fetchProfile()
+    }, [fetchProfile])
 
     const managerAndStaff = data ? [...data.businesses.manager, ...data.businesses.staff] : []
 
@@ -244,16 +342,34 @@ export default function UserProfileModal({ onClose }: Props) {
     }
 
     return (
-        <View style={[styles.card, { paddingTop: insets.top }]}>
-            <View style={styles.header}>
+        <View style={styles.card}>
+            {/* Header matches Dashboard's headerRow exactly: same h1/h1Sub
+                text styles, same 44x44 round bell button + badge sizing,
+                same paddingHorizontal/border-bottom treatment. Safe-area
+                top inset is folded into paddingTop since this modal has
+                no separate screen wrapper. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.headerTitle}>Profile</Text>
-                    <Text style={styles.headerSubtitle}>Manage your account and view your activity.</Text>
+                    <Text style={styles.h1}>Profile</Text>
+                    <Text style={styles.h1Sub}>Manage your account and view your activity.</Text>
                 </View>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity style={styles.bellButton} accessibilityLabel="Notifications">
-                        <Bell size={20} color="#111827" />
-                        <View style={styles.bellBadge} />
+                    <TouchableOpacity
+                        onPress={() => {
+                            setShowNotifications(true)
+                            fetchNotifications()
+                        }}
+                        style={styles.bellButton}
+                        accessibilityLabel="Notifications"
+                    >
+                        <Bell size={20} color="#9CA3AF" />
+                        {unreadNotificationCount > 0 && (
+                            <View style={styles.bellBadge}>
+                                <Text style={styles.bellBadgeText}>
+                                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                     {onClose && (
                         <TouchableOpacity onPress={onClose} style={styles.closeButton} accessibilityLabel="Close">
@@ -280,6 +396,10 @@ export default function UserProfileModal({ onClose }: Props) {
 
             {!loading && !error && data && (
                 <ScrollView contentContainerStyle={styles.body}>
+                    {/* Avatar + name + email + join date are centered across
+                        the full width of the card (identityCard is a
+                        full-width column with alignItems: 'center'). No
+                        edit/pencil icon here — profile is view-only. */}
                     <View style={styles.identityCard}>
                         <View style={styles.avatar}>
                             {data.user.avatar_url ? (
@@ -288,14 +408,9 @@ export default function UserProfileModal({ onClose }: Props) {
                                 <Text style={styles.avatarInitials}>{getInitials(data.user.name)}</Text>
                             )}
                         </View>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={styles.userName} numberOfLines={1}>{data.user.name}</Text>
-                            <Text style={styles.userEmail} numberOfLines={1}>{data.user.email}</Text>
-                            <Text style={styles.userJoined}>Joined {formatJoinDate(data.user.created_at)}</Text>
-                        </View>
-                        <TouchableOpacity style={styles.editButton} accessibilityLabel="Edit profile">
-                            <Pencil size={16} color="#2563EB" />
-                        </TouchableOpacity>
+                        <Text style={styles.userName} numberOfLines={1}>{data.user.name}</Text>
+                        <Text style={styles.userEmail} numberOfLines={1}>{data.user.email}</Text>
+                        <Text style={styles.userJoined}>Joined {formatJoinDate(data.user.created_at)}</Text>
                     </View>
 
                     <View style={styles.statsCol}>
@@ -387,6 +502,17 @@ export default function UserProfileModal({ onClose }: Props) {
                     </TouchableOpacity>
                 </ScrollView>
             )}
+
+            {showNotifications && (
+                <NotificationsModal
+                    notifications={notifications}
+                    loading={notificationsLoading}
+                    onClose={() => setShowNotifications(false)}
+                    onMarkRead={handleMarkNotificationRead}
+                    onMarkAllRead={handleMarkAllNotificationsRead}
+                    onDecisionMade={handleNotificationDecisionMade}
+                />
+            )}
         </View>
     )
 }
@@ -397,29 +523,37 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#fff',
     },
-    header: {
+    // Matches Dashboard's headerRow exactly (flexDirection, alignItems,
+    // justifyContent, paddingHorizontal, border-bottom, background).
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 20,
+        paddingHorizontal: 16,
         paddingBottom: 16,
+        backgroundColor: '#fff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
     },
-    headerTitle: { fontSize: 26, fontWeight: '800', color: '#111827' },
-    headerSubtitle: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
+    // Matches Dashboard's h1 / h1Sub text styles exactly.
+    h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
+    h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    bellButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    // Matches Dashboard's bellButton / bellBadge / bellBadgeText sizing exactly.
+    bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     bellBadge: {
         position: 'absolute',
         top: 4,
         right: 6,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#2563EB',
-        borderWidth: 1.5,
-        borderColor: '#fff',
+        minWidth: 14,
+        height: 14,
+        paddingHorizontal: 2,
+        borderRadius: 7,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
+    bellBadgeText: { fontSize: 9, color: '#fff' },
     closeButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     loadingWrap: { paddingVertical: 48, alignItems: 'center', gap: 8 },
     loadingText: { fontSize: 13, color: '#9CA3AF' },
@@ -435,38 +569,31 @@ const styles = StyleSheet.create({
     body: { padding: 20, paddingBottom: 40 },
 
     identityCard: {
-        flexDirection: 'row',
+        // Full-width column, everything centered horizontally across the
+        // full width of the card (avatar on top, name/email/joined below).
+        width: '100%',
         alignItems: 'center',
-        gap: 14,
+        gap: 4,
         backgroundColor: '#EFF6FF',
         borderRadius: 16,
-        padding: 16,
+        padding: 20,
         marginBottom: 20,
     },
     avatar: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: '#DBEAFE',
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
+        marginBottom: 10,
     },
     avatarImg: { width: '100%', height: '100%' },
-    avatarInitials: { color: '#2563EB', fontSize: 16, fontWeight: '600' },
-    userName: { fontSize: 16, fontWeight: '700', color: '#111827' },
-    userEmail: { fontSize: 12, color: '#6B7280', marginTop: 1 },
-    userJoined: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
-    editButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: '#DBEAFE',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    avatarInitials: { color: '#2563EB', fontSize: 18, fontWeight: '600' },
+    userName: { fontSize: 16, fontWeight: '700', color: '#111827', textAlign: 'center' },
+    userEmail: { fontSize: 12, color: '#6B7280', marginTop: 1, textAlign: 'center' },
+    userJoined: { fontSize: 11, color: '#9CA3AF', marginTop: 4, textAlign: 'center' },
 
     statsCol: { gap: 12, marginBottom: 24 },
     statCard: { borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 16, padding: 16 },
