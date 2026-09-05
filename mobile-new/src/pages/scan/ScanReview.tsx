@@ -69,7 +69,7 @@ export default function ScanReview() {
     // bulk-review screen, so hook order stays consistent for the
     // lifetime of this mounted screen.
     if (!initialReceipt) {
-        navigation.replace('ScanUpload')
+        navigation.replace('Scan')
         return null
     }
 
@@ -365,7 +365,7 @@ export default function ScanReview() {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            navigation.navigate('ScanUpload')
+            navigation.goBack()
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {
@@ -600,7 +600,7 @@ export default function ScanReview() {
 
                         <View style={styles.actionsRow}>
                             <TouchableOpacity
-                                onPress={() => navigation.navigate('ScanUpload')}
+                                onPress={() => navigation.goBack()}
                                 style={styles.backButton}
                             >
                                 <Text style={styles.backButtonText}>Back</Text>
