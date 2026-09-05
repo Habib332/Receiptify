@@ -4,7 +4,7 @@ import Layout from '../../components/Layout'
 import UploadModeToggle from './UploadModeToggle'
 import BusinessSelector, { type BusinessOption } from '../dashboard/BusinessSelector'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 function getToken() {
     return sessionStorage.getItem('token')

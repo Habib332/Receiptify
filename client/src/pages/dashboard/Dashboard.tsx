@@ -8,7 +8,7 @@ import NotificationsModal, { type NotificationItem } from '../business/Notificat
 import { LineChart, Line, ResponsiveContainer, XAxis, Tooltip } from 'recharts';
 import { useLocation } from 'react-router-dom'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // ---- Types (mirror the receipts.repository.js row shape) ----
 type VerificationStatus = 'pending' | 'verified' | 'rejected'

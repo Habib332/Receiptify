@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // (e.g. http://192.168.1.20:5000/api) or an Expo tunnel when testing
 // outside a browser-based simulator.
 export const API_BASE_URL =
-    process.env.EXPO_PUBLIC_API_URL || 'https://receiptify-zeta.vercel.app/api'
+    process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'
 
 // ---- Token storage ----
 // Web used sessionStorage (tab-scoped, cleared on close). React Native
