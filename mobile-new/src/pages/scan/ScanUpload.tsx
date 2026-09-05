@@ -17,7 +17,7 @@ import Layout from '../../components/Layout'
 import UploadModeToggle from './UploadModeToggle'
 import BusinessSelector, { type BusinessOption } from '../dashboard/BusinessSelector'
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:5000/api'
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
 async function getToken() {
     return AsyncStorage.getItem('token')
