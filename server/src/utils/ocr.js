@@ -5,7 +5,7 @@ const env = require("../config/env");
 // (see https://ai.google.dev/pricing), Flash/Flash-Lite remain free with
 // reduced quotas. Pin an explicit version rather than an alias so
 // behavior doesn't shift under us if Google updates the "latest" pointer.
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.6-flash";
 
 const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
 
