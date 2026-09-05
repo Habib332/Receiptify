@@ -316,9 +316,20 @@ export default function UserProfileModal({ onClose }: Props) {
 
     const managerAndStaff = data ? [...data.businesses.manager, ...data.businesses.staff] : []
 
-    // Placeholder — all Account rows point here for now; swap each one's
-    // onPress for its real destination once those screens exist.
+    // Placeholder — remaining Account rows point here until those screens exist.
     const goToPlaceholder = () => navigation.navigate('Businesses')
+
+    // AboutTheCreators is a tab within this same Tab.Navigator, so a
+    // normal navigate() works.
+    const goToAboutTheCreators = () => navigation.navigate('AboutTheCreators')
+
+    // AboutReceiptify is a Stack route that sits outside the Tab.Navigator
+    // (same pattern used elsewhere in the app), so we reach it through the
+    // parent stack navigator rather than this tab navigator.
+    const goToAboutReceiptify = () => {
+        const rootNavigation = navigation.getParent() ?? navigation
+        rootNavigation.dispatch(CommonActions.navigate({ name: 'AboutReceiptify' }))
+    }
 
     // Clears everything cached locally (auth token, any persisted state)
     // and drops the user back on the sign-in screen with a reset stack so
@@ -478,14 +489,14 @@ export default function UserProfileModal({ onClose }: Props) {
                             bg="#EFF6FF"
                             title="Help & Support"
                             subtitle="Get help and contact support"
-                            onPress={goToPlaceholder}
+                            onPress={goToAboutTheCreators}
                         />
                         <AccountRow
                             icon={<Info size={18} color="#D97706" />}
                             bg="#FEF3C7"
                             title="About App"
                             subtitle="Version 1.0.0"
-                            onPress={goToPlaceholder}
+                            onPress={goToAboutReceiptify}
                             isLast
                         />
                     </View>

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { View } from 'react-native'
 
+import SplashScreen from './src/pages/splash/SplashScreen'
 import SignIn from './src/pages/auth/SignIn'
 import SignUp from './src/pages/auth/SignUp'
 import ForgotPassword from './src/pages/auth/ForgotPassword'
@@ -25,6 +26,7 @@ import { StackScreen } from 'react-native-screens'
 // of directly on this stack. Screens still nested here can navigate into
 // them via navigation.navigate('MainTabs', { screen: 'Dashboard', params: {...} }).
 export type RootStackParamList = {
+    Splash: undefined // initial launch screen, shown for a couple seconds
     SignIn: undefined // '/', '/sign-in'
     SignUp: undefined // '/sign-up'
     ForgotPassword: undefined // '/forgot-password'
@@ -45,9 +47,10 @@ export default function App() {
                 <SystemBars style="dark" />
                 <NavigationContainer>
                     <Stack.Navigator
-                        initialRouteName="SignIn"
+                        initialRouteName="Splash"
                         screenOptions={{ headerShown: false }}
                     >
+                        <Stack.Screen name="Splash" component={SplashScreen} />
                         <Stack.Screen name="SignIn" component={SignIn} />
                         <Stack.Screen name="SignUp" component={SignUp} />
                         <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
