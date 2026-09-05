@@ -587,11 +587,13 @@ export default function BusinessPage() {
         <View style={styles.screen}>
             {/* Pinned header: sits outside Layout's internal ScrollView, so
                 it stays fixed while Layout's children (everything below)
-                scroll underneath it. Mirrors UserProfileModal's header. */}
+                scroll underneath it. Matches Dashboard's headerRow/h1/h1Sub
+                heading style, plus the bell notification icon with a
+                numbered unread badge (rather than a plain dot). */}
             <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
-                <View>
-                    <Text style={styles.pageTitle}>Businesses</Text>
-                    <Text style={styles.pageSubtitle}>Manage all your saved businesses in one place.</Text>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.h1}>Businesses</Text>
+                    <Text style={styles.h1Sub}>Manage all your saved businesses in one place.</Text>
                 </View>
                 <TouchableOpacity
                     style={styles.bellButton}
@@ -602,7 +604,11 @@ export default function BusinessPage() {
                 >
                     <Bell size={20} color={colors.gray400} strokeWidth={1.8} />
                     {unreadNotificationCount > 0 && (
-                        <View style={styles.bellBadge} />
+                        <View style={styles.bellBadge}>
+                            <Text style={styles.bellBadgeText}>
+                                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                            </Text>
+                        </View>
                     )}
                 </TouchableOpacity>
             </View>
@@ -889,33 +895,32 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: colors.gray100,
     },
-    pageTitle: {
-        fontSize: 24,
+    // Dashboard-style heading names/sizes (h1/h1Sub), same 22px/13px pair
+    h1: {
+        fontSize: 22,
         fontWeight: '700',
         color: colors.gray900,
     },
-    pageSubtitle: {
-        fontSize: 14,
+    h1Sub: {
+        fontSize: 13,
         color: colors.gray400,
         marginTop: 4,
     },
-    
-    bellButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+
+    bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     bellBadge: {
         position: 'absolute',
         top: 4,
         right: 6,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#2563EB',
-        borderWidth: 1.5,
-        borderColor: '#fff',
+        minWidth: 14,
+        height: 14,
+        paddingHorizontal: 2,
+        borderRadius: 7,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    badgeText: {
-        fontSize: 9,
-        color: colors.white,
-    },
+    bellBadgeText: { fontSize: 9, color: colors.white },
     errorBanner: {
         marginBottom: 16,
         fontSize: 12,

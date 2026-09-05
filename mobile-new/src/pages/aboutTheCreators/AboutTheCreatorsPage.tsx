@@ -1,10 +1,13 @@
-import { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Linking, ScrollView } from 'react-native'
+import { useState, useCallback, useEffect } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path } from 'react-native-svg'
+import { Bell } from 'lucide-react-native'
 import Layout from '../../components/Layout'
 import ContactModal from './ContactModal'
+import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
+import { API_BASE_URL, authHeaders } from '../../api/config'
 
 interface Creator {
     name: string
@@ -41,14 +44,130 @@ export default function AboutTheCreatorsPage() {
     const navigation = useNavigation<any>()
     const [showContactModal, setShowContactModal] = useState<boolean>(false)
 
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [notifications, setNotifications] = useState<NotificationItem[]>([])
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
+
+    const fetchNotifications = useCallback(async () => {
+        setNotificationsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications`, {
+                method: 'GET',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load notifications')
+            }
+            setNotifications(
+                (data.data || []).map((n: any) => ({
+                    ...n,
+                    id: n.id ?? n.notification_id,
+                    businessName: n.businessName ?? n.business_name ?? null,
+                    actorName: n.actorName ?? n.actor_name ?? null,
+                    actorEmail: n.actorEmail ?? n.actor_email ?? null,
+                    createdAt: n.createdAt ?? n.created_at,
+                    read: n.read ?? n.is_read ?? false,
+                }))
+            )
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setNotificationsLoading(false)
+        }
+    }, [])
+
+    // Load notifications on mount and poll periodically so the bell badge
+    // stays current even if the user leaves the app idle in the background.
+    useEffect(() => {
+        fetchNotifications()
+        const interval = setInterval(fetchNotifications, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifications])
+
+    const unreadNotificationCount = notifications.filter((n) => !n.read).length
+
+    const handleMarkNotificationRead = async (id: string) => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notification as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleMarkAllNotificationsRead = async () => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => ({ ...n, read: true })))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notifications as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleNotificationDecisionMade = async (notificationId: string, decision: 'approve' | 'reject') => {
+        setNotifications((prev) =>
+            prev.map((n) =>
+                n.id === notificationId && n.joinRequest
+                    ? {
+                        ...n,
+                        read: true,
+                        joinRequest: {
+                            ...n.joinRequest,
+                            status: decision === 'approve' ? 'approved' : 'rejected',
+                        },
+                    }
+                    : n
+            )
+        )
+        fetchNotifications()
+    }
+
     return (
         <View style={styles.screen}>
             {/* Pinned header: sits outside Layout's internal ScrollView, so
                 it stays fixed while Layout's children (everything below)
-                scroll underneath it. Mirrors the header treatment on
-                Profile/Dashboard/Business, minus the bell (not used here). */}
-            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <Text style={styles.title}>About the Creators</Text>
+                scroll underneath it. Matches Dashboard's headerRow/h1/h1Sub
+                heading style, plus the bell notification icon. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.h1}>About the Creators</Text>
+                    <Text style={styles.h1Sub}>Meet the people behind Receiptify</Text>
+                </View>
+                <TouchableOpacity
+                    onPress={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                    style={styles.bellButton}
+                >
+                    <Bell size={20} color="#9CA3AF" />
+                    {unreadNotificationCount > 0 && (
+                        <View style={styles.bellBadge}>
+                            <Text style={styles.bellBadgeText}>
+                                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                            </Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
             </View>
 
             <Layout>
@@ -144,6 +263,17 @@ export default function AboutTheCreatorsPage() {
                     <ContactModal onClose={() => setShowContactModal(false)} />
                 )}
             </Layout>
+
+            {showNotifications && (
+                <NotificationsModal
+                    notifications={notifications}
+                    loading={notificationsLoading}
+                    onClose={() => setShowNotifications(false)}
+                    onMarkRead={handleMarkNotificationRead}
+                    onMarkAllRead={handleMarkAllNotificationsRead}
+                    onDecisionMade={handleNotificationDecisionMade}
+                />
+            )}
         </View>
     )
 }
@@ -153,18 +283,35 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#ffffff',
     },
-    header: {
+
+    // Pinned header — matches Dashboard's headerRow/h1/h1Sub/bellButton
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingBottom: 16,
-        backgroundColor: '#ffffff',
+        backgroundColor: '#fff',
         borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
+        borderBottomColor: '#F3F4F6',
     },
-    title: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#111827',
+    h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
+    h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
+    bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    bellBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 6,
+        minWidth: 14,
+        height: 14,
+        paddingHorizontal: 2,
+        borderRadius: 7,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
+    bellBadgeText: { fontSize: 9, color: '#fff' },
+
     sectionHeader: {
         marginBottom: 16,
     },
@@ -334,4 +481,4 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
     },
-})
+})  

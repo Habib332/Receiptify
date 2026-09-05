@@ -1,12 +1,113 @@
+import { useState, useCallback, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
+import { Bell } from 'lucide-react-native'
 import { useNavigation, CommonActions } from '@react-navigation/native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Layout from '../../components/Layout'
+import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
+import { API_BASE_URL, authHeaders } from '../../api/config'
 
 export default function AboutReceiptifyPage() {
     const navigation = useNavigation<any>()
     const insets = useSafeAreaInsets()
+
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [notifications, setNotifications] = useState<NotificationItem[]>([])
+    const [notificationsLoading, setNotificationsLoading] = useState(false)
+
+    const fetchNotifications = useCallback(async () => {
+        setNotificationsLoading(true)
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications`, {
+                method: 'GET',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to load notifications')
+            }
+            setNotifications(
+                (data.data || []).map((n: any) => ({
+                    ...n,
+                    id: n.id ?? n.notification_id,
+                    businessName: n.businessName ?? n.business_name ?? null,
+                    actorName: n.actorName ?? n.actor_name ?? null,
+                    actorEmail: n.actorEmail ?? n.actor_email ?? null,
+                    createdAt: n.createdAt ?? n.created_at,
+                    read: n.read ?? n.is_read ?? false,
+                }))
+            )
+        } catch (err) {
+            console.error(err)
+        } finally {
+            setNotificationsLoading(false)
+        }
+    }, [])
+
+    // Load notifications on mount and poll periodically so the bell badge
+    // stays current even if the user leaves the app idle in the background.
+    useEffect(() => {
+        fetchNotifications()
+        const interval = setInterval(fetchNotifications, 30000)
+        return () => clearInterval(interval)
+    }, [fetchNotifications])
+
+    const unreadNotificationCount = notifications.filter((n) => !n.read).length
+
+    const handleMarkNotificationRead = async (id: string) => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notification as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleMarkAllNotificationsRead = async () => {
+        const prev = notifications
+        setNotifications((p) => p.map((n) => ({ ...n, read: true })))
+        try {
+            const res = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+                method: 'PATCH',
+                headers: await authHeaders(),
+            })
+            const data = await res.json()
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Failed to mark notifications as read')
+            }
+        } catch (err) {
+            setNotifications(prev)
+            console.error(err)
+        }
+    }
+
+    const handleNotificationDecisionMade = async (notificationId: string, decision: 'approve' | 'reject') => {
+        setNotifications((prev) =>
+            prev.map((n) =>
+                n.id === notificationId && n.joinRequest
+                    ? {
+                        ...n,
+                        read: true,
+                        joinRequest: {
+                            ...n.joinRequest,
+                            status: decision === 'approve' ? 'approved' : 'rejected',
+                        },
+                    }
+                    : n
+            )
+        )
+        fetchNotifications()
+    }
 
     const stats = [
         {
@@ -52,10 +153,10 @@ export default function AboutReceiptifyPage() {
 
     return (
         <View style={styles.screen}>
-            {/* Pinned header with back button — same treatment as
-                AboutTheCreatorsPage's header, plus a back arrow that
-                returns to AboutTheCreators. */}
-            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+            {/* Pinned header — back button preserved, heading now uses the
+                Dashboard-style h1/h1Sub pair, plus the bell notification
+                icon with unread badge. */}
+            <View style={[styles.headerRow, { paddingTop: insets.top + 16 }]}>
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     style={styles.backButton}
@@ -65,7 +166,28 @@ export default function AboutReceiptifyPage() {
                         <Path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                     </Svg>
                 </TouchableOpacity>
-                <Text style={styles.title}>About Receiptify</Text>
+
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.h1}>About Receiptify</Text>
+                    <Text style={styles.h1Sub}>Learn more about the app and how it's built</Text>
+                </View>
+
+                <TouchableOpacity
+                    onPress={() => {
+                        setShowNotifications(true)
+                        fetchNotifications()
+                    }}
+                    style={styles.bellButton}
+                >
+                    <Bell size={20} color="#9CA3AF" />
+                    {unreadNotificationCount > 0 && (
+                        <View style={styles.bellBadge}>
+                            <Text style={styles.bellBadgeText}>
+                                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                            </Text>
+                        </View>
+                    )}
+                </TouchableOpacity>
             </View>
 
             <Layout>
@@ -211,6 +333,17 @@ export default function AboutReceiptifyPage() {
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {showNotifications && (
+                <NotificationsModal
+                    notifications={notifications}
+                    loading={notificationsLoading}
+                    onClose={() => setShowNotifications(false)}
+                    onMarkRead={handleMarkNotificationRead}
+                    onMarkAllRead={handleMarkAllNotificationsRead}
+                    onDecisionMade={handleNotificationDecisionMade}
+                />
+            )}
         </View>
     )
 }
@@ -220,9 +353,11 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#ffffff',
     },
-    header: {
+
+    // Pinned header — back button + Dashboard-style h1/h1Sub + bell
+    headerRow: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 12,
         paddingHorizontal: 16,
         paddingBottom: 16,
@@ -239,11 +374,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    title: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#111827',
+    h1: { fontSize: 22, fontWeight: '700', color: '#111827' },
+    h1Sub: { fontSize: 13, color: '#9CA3AF', marginTop: 4 },
+    bellButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    bellBadge: {
+        position: 'absolute',
+        top: 4,
+        right: 6,
+        minWidth: 14,
+        height: 14,
+        paddingHorizontal: 2,
+        borderRadius: 7,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
+    bellBadgeText: { fontSize: 9, color: '#fff' },
+
     hero: {
         backgroundColor: 'rgba(239,246,255,0.6)',
         borderRadius: 16,
