@@ -43,6 +43,10 @@ export default function SignIn() {
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    // Controls whether the password field's characters are masked. Off
+    // (masked) by default, same as any standard sign-in form; toggled by
+    // the eye icon inside the field.
+    const [showPassword, setShowPassword] = useState(false)
 
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -199,10 +203,22 @@ export default function SignIn() {
                                         onChangeText={setPassword}
                                         placeholder="Password"
                                         placeholderTextColor="#9CA3AF"
-                                        secureTextEntry
+                                        secureTextEntry={!showPassword}
                                         autoComplete="password"
-                                        style={styles.input}
+                                        style={[styles.input, styles.inputWithTrailingIcon]}
                                     />
+                                    <TouchableOpacity
+                                        onPress={() => setShowPassword((v) => !v)}
+                                        hitSlop={8}
+                                        style={styles.trailingIconButton}
+                                        accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                                    >
+                                        <Feather
+                                            name={showPassword ? 'eye-off' : 'eye'}
+                                            size={16}
+                                            color="#9CA3AF"
+                                        />
+                                    </TouchableOpacity>
                                 </View>
 
                                 <View style={styles.forgotRow}>
@@ -334,6 +350,14 @@ const styles = StyleSheet.create({
     },
     inputIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 14, color: '#111827' },
+    // Extra right-padding on the password field so typed text never runs
+    // underneath the eye icon that sits at the end of the row.
+    inputWithTrailingIcon: { paddingRight: 8 },
+    trailingIconButton: {
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        marginLeft: 4,
+    },
     submitButton: {
         width: '100%',
         backgroundColor: '#2563EB',
