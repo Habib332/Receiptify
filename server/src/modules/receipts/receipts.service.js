@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { waitUntil } = require("@vercel/functions");
 const receiptsRepository = require("./receipts.repository");
 const {
   uploadReceiptScreenshot,
@@ -250,10 +251,22 @@ async function createReceipt({
   });
 
   if (imageUrl) {
-    runOcrForReceipt({
-      receiptId: receipt.receipt_id,
-      filePath: imageUrl,
-    }).catch((err) => console.error("Unexpected OCR trigger error:", err));
+    // Fire-and-forget so the HTTP response doesn't block on OCR — but on
+    // Vercel, an unawaited promise has no guarantee of surviving past the
+    // response: the moment res.json() is sent, the serverless function's
+    // execution context can be frozen/reclaimed mid-flight, silently
+    // killing this before getSignedReceiptUrl or Gemini ever gets called
+    // (no error, no log — the function just stops existing). waitUntil
+    // registers the promise with the platform so the invocation is kept
+    // alive until it settles, without making the client wait for it.
+    // Locally (plain `node`/nodemon) this is a harmless no-op equivalent
+    // to the previous behavior, since the process stays alive regardless.
+    waitUntil(
+      runOcrForReceipt({
+        receiptId: receipt.receipt_id,
+        filePath: imageUrl,
+      }).catch((err) => console.error("Unexpected OCR trigger error:", err)),
+    );
   }
 
   if (duplicateStatus === "flagged") {
@@ -551,7 +564,7 @@ async function cleanupStaleDrafts(olderThanHours = 24) {
 async function getReceiptsForExport({ businessId, query }) {
   const receipts = await searchReceipts({ businessId, query });
   return receiptsRepository.getReceiptsForExport(receipts);
-} 
+}
 
 module.exports = {
   createReceipt,

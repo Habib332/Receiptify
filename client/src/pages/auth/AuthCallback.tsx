@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 // Route this at /auth/callback and set FRONTEND_OAUTH_CALLBACK_URL in the
 // backend .env to match, e.g. http://localhost:5173/auth/callback
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
 export default function AuthCallback() {
     const [searchParams] = useSearchParams()
