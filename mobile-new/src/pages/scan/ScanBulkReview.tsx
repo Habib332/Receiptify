@@ -25,8 +25,6 @@ async function authHeaders(): Promise<Record<string, string>> {
     return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-// Matches the raw `SELECT * FROM receipts` row shape (pool.query results
-// aren't camelCased) — same shape ScanReview.tsx works with.
 interface Receipt {
     receipt_id: number | string
     amount: string | number | null
@@ -63,15 +61,11 @@ export default function ScanBulkReview() {
 
     // Nothing to review (direct nav, stale params, or a batch that
     // produced zero receipts) — bounce back rather than showing an empty
-    // wizard.
-    useEffect(() => {
-        if (!initialReceipts || initialReceipts.length === 0) {
-            navigation.replace('ScanBulkUpload')
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
+    // wizard. This check MUST run before any hooks are declared below,
+    // exactly like the web version, so hook order stays consistent for
+    // the lifetime of this mounted screen.
     if (!initialReceipts || initialReceipts.length === 0) {
+        navigation.replace('ScanBulkUpload')
         return null
     }
 
@@ -116,9 +110,6 @@ export default function ScanBulkReview() {
         transactionReference: false,
     })
 
-    // Re-seed all local form state whenever we step to a different
-    // receipt in the batch — each one gets a clean form and its own
-    // "touched" tracking, same as ScanReview does for a single receipt.
     useEffect(() => {
         const r = receipts[currentIndex]
         touched.current = {
@@ -148,8 +139,6 @@ export default function ScanBulkReview() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentIndex])
 
-    // Signed image URL, same pattern as ScanReview — fetched per receipt,
-    // never cached beyond this component.
     useEffect(() => {
         if (!receipt.image_url) return
         let cancelled = false
@@ -175,8 +164,6 @@ export default function ScanBulkReview() {
         }
     }, [receipt.receipt_id, receipt.image_url])
 
-    // OCR poll for the current receipt only. Stops immediately if the
-    // user steps away (index change unmounts this effect via cleanup).
     useEffect(() => {
         if (!polling) return
         let cancelled = false
@@ -324,7 +311,6 @@ export default function ScanBulkReview() {
                 <Text style={styles.subtitle}>Confirm each receipt's details, or make changes below.</Text>
             </View>
 
-            {/* Progress: counter + bar + running tally */}
             <View style={styles.progressBlock}>
                 <View style={styles.progressHeader}>
                     <Text style={styles.progressCounter}>
@@ -347,7 +333,6 @@ export default function ScanBulkReview() {
                 </View>
             </View>
 
-            {/* Receipt preview */}
             <View style={styles.previewCard}>
                 {imageUrl ? (
                     <Image source={{ uri: imageUrl }} style={styles.previewImage} resizeMode="contain" />
@@ -366,7 +351,6 @@ export default function ScanBulkReview() {
                 )}
             </View>
 
-            {/* Editable extracted data */}
             <View style={styles.form}>
                 {isPossibleDuplicate && (
                     <View style={styles.warningBanner}>
@@ -552,54 +536,16 @@ export default function ScanBulkReview() {
 }
 
 const styles = StyleSheet.create({
-    scrollContent: {
-        padding: 16,
-        paddingBottom: 40,
-    },
-    
-    header: {
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: '#111827',
-    },
-    subtitle: {
-        fontSize: 13,
-        color: '#9ca3af',
-        marginTop: 6,
-    },
-    progressBlock: {
-        marginBottom: 24,
-    },
-    progressHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    progressCounter: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#111827',
-    },
-    progressTally: {
-        fontSize: 12,
-        color: '#9ca3af',
-    },
-    progressTrack: {
-        width: '100%',
-        height: 6,
-        backgroundColor: '#f3f4f6',
-        borderRadius: 999,
-        overflow: 'hidden',
-    },
-    progressFill: {
-        height: '100%',
-        backgroundColor: '#2563eb',
-        borderRadius: 999,
-    },
+    scrollContent: { padding: 16, paddingBottom: 40 },
+    header: { marginBottom: 20 },
+    title: { fontSize: 22, fontWeight: '700', color: '#111827' },
+    subtitle: { fontSize: 13, color: '#9ca3af', marginTop: 6 },
+    progressBlock: { marginBottom: 24 },
+    progressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    progressCounter: { fontSize: 14, fontWeight: '600', color: '#111827' },
+    progressTally: { fontSize: 12, color: '#9ca3af' },
+    progressTrack: { width: '100%', height: 6, backgroundColor: '#f3f4f6', borderRadius: 999, overflow: 'hidden' },
+    progressFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 999 },
     previewCard: {
         borderWidth: 1,
         borderColor: '#f3f4f6',
@@ -611,164 +557,34 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 24,
     },
-    previewImage: {
-        width: '100%',
-        height: '100%',
-    },
-    previewPlaceholder: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingHorizontal: 24,
-    },
-    previewPlaceholderText: {
-        fontSize: 12,
-        color: '#9ca3af',
-        textAlign: 'center',
-    },
-    form: {
-        gap: 20,
-    },
-    warningBanner: {
-        backgroundColor: '#fff7ed',
-        borderWidth: 1,
-        borderColor: '#fed7aa',
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    warningText: {
-        fontSize: 12,
-        color: '#c2410c',
-    },
-    infoBannerAmber: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: '#fffbeb',
-        borderWidth: 1,
-        borderColor: '#fde68a',
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    infoTextAmber: {
-        flex: 1,
-        fontSize: 12,
-        color: '#b45309',
-    },
-    infoBannerGreen: {
-        backgroundColor: '#f0fdf4',
-        borderWidth: 1,
-        borderColor: '#bbf7d0',
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    infoTextGreen: {
-        fontSize: 12,
-        color: '#15803d',
-    },
-    errorBanner: {
-        backgroundColor: '#fef2f2',
-        borderWidth: 1,
-        borderColor: '#fee2e2',
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-    },
-    errorBannerText: {
-        fontSize: 12,
-        color: '#dc2626',
-    },
-    row: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 12,
-    },
-    halfField: {
-        flexBasis: '47%',
-        flexGrow: 1,
-    },
-    fullField: {
-        flexBasis: '100%',
-    },
-    section: {
-        paddingTop: 4,
-    },
-    sectionLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#374151',
-        marginBottom: 12,
-    },
-    fieldLabel: {
-        fontSize: 12,
-        fontWeight: '500',
-        color: '#6b7280',
-        marginBottom: 6,
-    },
-    input: {
-        backgroundColor: '#f3f4f6',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
-        color: '#374151',
-    },
-    textArea: {
-        minHeight: 64,
-        textAlignVertical: 'top',
-    },
-    actionsWrap: {
-        gap: 12,
-        paddingTop: 4,
-    },
-    saveButton: {
-        backgroundColor: '#2563eb',
-        borderRadius: 8,
-        paddingVertical: 12,
-        alignItems: 'center',
-    },
-    saveButtonDisabled: {
-        backgroundColor: '#93c5fd',
-    },
-    saveButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#ffffff',
-    },
-    secondaryActionsRow: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    backButton: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 8,
-        paddingVertical: 12,
-        alignItems: 'center',
-    },
-    backButtonDisabled: {
-        opacity: 0.4,
-    },
-    backButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#374151',
-    },
-    skipButton: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#e5e7eb',
-        borderRadius: 8,
-        paddingVertical: 12,
-        alignItems: 'center',
-    },
-    skipButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#6b7280',
-    },
+    previewImage: { width: '100%', height: '100%' },
+    previewPlaceholder: { alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 24 },
+    previewPlaceholderText: { fontSize: 12, color: '#9ca3af', textAlign: 'center' },
+    form: { gap: 20 },
+    warningBanner: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+    warningText: { fontSize: 12, color: '#c2410c' },
+    infoBannerAmber: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+    infoTextAmber: { flex: 1, fontSize: 12, color: '#b45309' },
+    infoBannerGreen: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+    infoTextGreen: { fontSize: 12, color: '#15803d' },
+    errorBanner: { backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fee2e2', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+    errorBannerText: { fontSize: 12, color: '#dc2626' },
+    row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    halfField: { flexBasis: '47%', flexGrow: 1 },
+    fullField: { flexBasis: '100%' },
+    section: { paddingTop: 4 },
+    sectionLabel: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 12 },
+    fieldLabel: { fontSize: 12, fontWeight: '500', color: '#6b7280', marginBottom: 6 },
+    input: { backgroundColor: '#f3f4f6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#374151' },
+    textArea: { minHeight: 64, textAlignVertical: 'top' },
+    actionsWrap: { gap: 12, paddingTop: 4 },
+    saveButton: { backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+    saveButtonDisabled: { backgroundColor: '#93c5fd' },
+    saveButtonText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+    secondaryActionsRow: { flexDirection: 'row', gap: 12 },
+    backButton: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+    backButtonDisabled: { opacity: 0.4 },
+    backButtonText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+    skipButton: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+    skipButtonText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
 })
