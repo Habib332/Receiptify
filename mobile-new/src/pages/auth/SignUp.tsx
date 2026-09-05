@@ -46,6 +46,10 @@ export default function SignUp() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
+    // Independent toggles for each password field, so revealing one
+    // doesn't force-reveal the other.
+    const [showPassword, setShowPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
     // Hides the hero illustration entirely while the keyboard is open, so
     // the form gets that screen space back instead of the image just being
@@ -106,7 +110,7 @@ export default function SignUp() {
                 await setStoredUser(user)
             }
 
-            navigation.navigate('SelectBusiness')
+            navigation.navigate('MainTabs', { screen: 'Businesses' })
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong')
         } finally {
@@ -211,10 +215,22 @@ export default function SignUp() {
                                     onChangeText={setPassword}
                                     placeholder="Password"
                                     placeholderTextColor="#9CA3AF"
-                                    secureTextEntry
+                                    secureTextEntry={!showPassword}
                                     autoComplete="password-new"
-                                    style={styles.input}
+                                    style={[styles.input, styles.inputWithTrailingIcon]}
                                 />
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword((v) => !v)}
+                                    hitSlop={8}
+                                    style={styles.trailingIconButton}
+                                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    <Feather
+                                        name={showPassword ? 'eye-off' : 'eye'}
+                                        size={16}
+                                        color="#9CA3AF"
+                                    />
+                                </TouchableOpacity>
                             </View>
 
                             <View style={styles.inputRow}>
@@ -224,10 +240,22 @@ export default function SignUp() {
                                     onChangeText={setConfirmPassword}
                                     placeholder="Confirm password"
                                     placeholderTextColor="#9CA3AF"
-                                    secureTextEntry
+                                    secureTextEntry={!showConfirmPassword}
                                     autoComplete="password-new"
-                                    style={styles.input}
+                                    style={[styles.input, styles.inputWithTrailingIcon]}
                                 />
+                                <TouchableOpacity
+                                    onPress={() => setShowConfirmPassword((v) => !v)}
+                                    hitSlop={8}
+                                    style={styles.trailingIconButton}
+                                    accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
+                                >
+                                    <Feather
+                                        name={showConfirmPassword ? 'eye-off' : 'eye'}
+                                        size={16}
+                                        color="#9CA3AF"
+                                    />
+                                </TouchableOpacity>
                             </View>
 
                             <TouchableOpacity
@@ -345,6 +373,14 @@ const styles = StyleSheet.create({
     },
     inputIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 14, color: '#111827' },
+    // Extra right-padding on password fields so typed text never runs
+    // underneath the eye icon that sits at the end of the row.
+    inputWithTrailingIcon: { paddingRight: 8 },
+    trailingIconButton: {
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+        marginLeft: 4,
+    },
     submitButton: {
         width: '100%',
         backgroundColor: '#2563EB',
