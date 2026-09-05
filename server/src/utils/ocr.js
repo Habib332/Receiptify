@@ -330,10 +330,29 @@ Do not guess.
 Return valid JSON only.
 `;
 
+// Anything smaller than this is almost certainly not a real receipt photo
+// (an expired signed URL, an empty body, or an error/placeholder image
+// returned with a misleading 200 status). We'd rather fail loudly here
+// than silently hand Gemini garbage and get back a wall of nulls.
+const MIN_PLAUSIBLE_IMAGE_BYTES = 1000;
+
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 503]);
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1500;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function extractStatusCode(err) {
+  // @google/genai throws errors with the HTTP status in different shapes
+  // depending on version, so check a few likely spots rather than assume one.
+  return err?.status ?? err?.code ?? err?.response?.status ?? null;
+}
+
 /**
  * Downloads the image from a (possibly signed, expiring) URL and sends it
- * to Gemini for structured field extraction. No preprocessing needed,
- * Gemini reads the image directly.
+ * to Gemini for structured field extraction.
  *
  * @param {string} imageUrl - signed URL for the receipt screenshot
  * @returns {Promise<{
@@ -347,49 +366,133 @@ Return valid JSON only.
  * }>}
  */
 async function extractReceiptFields(imageUrl) {
+  // --- Step 1: download the image and verify we actually got one -------
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) {
     throw new Error(
-      `Failed to download image for OCR: ${imageResponse.status}`,
+      `[OCR] Failed to download image: HTTP ${imageResponse.status} for ${imageUrl}`,
     );
   }
+
   const arrayBuffer = await imageResponse.arrayBuffer();
-  const base64Image = Buffer.from(arrayBuffer).toString("base64");
   const mimeType = imageResponse.headers.get("content-type") || "image/png";
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: [
-      {
-        inlineData: {
-          mimeType,
-          data: base64Image,
+  console.log(
+    `[OCR] downloaded image: ${arrayBuffer.byteLength} bytes, content-type="${mimeType}", url=${imageUrl}`,
+  );
+
+  if (arrayBuffer.byteLength < MIN_PLAUSIBLE_IMAGE_BYTES) {
+    // This is the most common silent-null cause: the URL returned 200 but
+    // the body isn't a real image (expired signed URL, access-denied XML
+    // body, empty file, etc). Fail loudly instead of sending Gemini
+    // garbage and getting back a schema full of nulls.
+    throw new Error(
+      `[OCR] Downloaded body is suspiciously small (${arrayBuffer.byteLength} bytes) — ` +
+        `this is probably not a real image. Check whether imageUrl (${imageUrl}) had expired ` +
+        `or returned an error page with a 200 status.`,
+    );
+  }
+
+  if (!mimeType.startsWith("image/")) {
+    throw new Error(
+      `[OCR] content-type "${mimeType}" doesn't look like an image — Gemini will likely ` +
+        `fail to decode it silently and return nulls instead of erroring.`,
+    );
+  }
+
+  const base64Image = Buffer.from(arrayBuffer).toString("base64");
+
+  // --- Step 2: call Gemini, retrying transient failures ------------------
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODEL,
+        contents: [
+          {
+            inlineData: {
+              mimeType,
+              data: base64Image,
+            },
+          },
+          { text: PROMPT },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: receiptSchema,
+          // Deterministic, literal extraction — this is a reading task, not
+          // a creative one. Lower temperature reduces the odds of the model
+          // paraphrasing/guessing a name or bank instead of reporting what's
+          // actually on screen (or returning null when unsure).
+          temperature: 0,
         },
-      },
-      { text: PROMPT },
-    ],
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: receiptSchema,
-      // Deterministic, literal extraction — this is a reading task, not
-      // a creative one. Lower temperature reduces the odds of the model
-      // paraphrasing/guessing a name or bank instead of reporting what's
-      // actually on screen (or returning null when unsure).
-      temperature: 0,
-    },
-  });
+      });
 
-  const parsed = JSON.parse(response.text);
+      // Log what Gemini actually says about the request BEFORE parsing,
+      // so a "why is everything null" case is diagnosable from logs
+      // instead of requiring a re-run. finishReason other than "STOP"
+      // (e.g. SAFETY, RECITATION) or a low promptTokenCount are the two
+      // most likely explanations for a clean-but-empty result.
+      const finishReason = response.candidates?.[0]?.finishReason;
+      const promptFeedback = response.promptFeedback;
+      console.log(
+        `[OCR] gemini response: finishReason=${finishReason ?? "?"} ` +
+          `promptTokenCount=${response.usageMetadata?.promptTokenCount ?? "?"} ` +
+          `candidatesTokenCount=${response.usageMetadata?.candidatesTokenCount ?? "?"} ` +
+          `blockReason=${promptFeedback?.blockReason ?? "none"}`,
+      );
 
-  return {
-    amount: typeof parsed.amount === "number" ? parsed.amount : null,
-    date: parsed.date || null,
-    transactionReference: parsed.transactionReference || null,
-    senderName: parsed.senderName || null,
-    senderBank: parsed.senderBank || null,
-    receiverName: parsed.receiverName || null,
-    receiverBank: parsed.receiverBank || null,
-  };
+      if (!response.text) {
+        throw new Error(
+          `[OCR] Gemini returned no text content. finishReason=${finishReason}, ` +
+            `blockReason=${promptFeedback?.blockReason ?? "none"}. Full response: ` +
+            JSON.stringify(response).slice(0, 2000),
+        );
+      }
+
+      const parsed = JSON.parse(response.text);
+
+      const allNull = Object.values(parsed).every((v) => v === null);
+      if (allNull) {
+        // Not an error Gemini's API surfaces, but worth a loud log line —
+        // this is the "worked, but functionally failed" case.
+        console.warn(
+          `[OCR] Gemini returned a fully-null result for a ${arrayBuffer.byteLength}-byte ` +
+            `${mimeType} image. If the image looks readable to a human, this usually means ` +
+            `the bytes that reached Gemini weren't actually a valid/decodable image.`,
+        );
+      }
+
+      return {
+        amount: typeof parsed.amount === "number" ? parsed.amount : null,
+        date: parsed.date || null,
+        transactionReference: parsed.transactionReference || null,
+        senderName: parsed.senderName || null,
+        senderBank: parsed.senderBank || null,
+        receiverName: parsed.receiverName || null,
+        receiverBank: parsed.receiverBank || null,
+      };
+    } catch (err) {
+      lastError = err;
+      const statusCode = extractStatusCode(err);
+      const retryable = RETRYABLE_STATUS_CODES.has(statusCode);
+
+      console.error(
+        `[OCR] attempt ${attempt}/${MAX_ATTEMPTS} failed ` +
+          `(status=${statusCode ?? "unknown"}, retryable=${retryable}): ${err.message}`,
+      );
+
+      if (!retryable || attempt === MAX_ATTEMPTS) {
+        break;
+      }
+      await sleep(RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  // Re-throw the real error rather than swallowing it into a null object —
+  // if a caller upstream wants a graceful fallback, it should be an
+  // explicit try/catch there, not a silent default here.
+  throw lastError;
 }
 
 module.exports = {
