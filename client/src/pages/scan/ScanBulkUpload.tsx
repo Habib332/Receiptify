@@ -11,7 +11,7 @@ function getToken() {
     return sessionStorage.getItem('token')
 }
 
-function authHeaders() {
+function authHeaders(): Record<string, string> {
     const token = getToken()
     return token ? { Authorization: `Bearer ${token}` } : {}
 }
@@ -165,9 +165,9 @@ export default function ScanBulkUpload() {
     }
 
     const handleFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-        addFiles(e.target.files)
-        e.target.value = '' // allow re-selecting the same file after removal
-    }
+    addFiles(e.target.files ?? undefined)
+    e.target.value = ''
+}
 
     const validate = () => {
         const errors: typeof fieldErrors = {}

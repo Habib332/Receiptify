@@ -34,7 +34,6 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
     // file gets its own local preview URL that overrides this until upload
     // succeeds (then the parent's refetch will replace it with the real URL).
     const [logoUrl, setLogoUrl] = useState<string | null>(business.logoUrl ?? null)
-    const [logoFile, setLogoFile] = useState<File | null>(null)
     const [uploadingLogo, setUploadingLogo] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -48,9 +47,8 @@ export default function EditBusinessModal({ business, onClose, onSave }: Props) 
         }
 
         setError('')
-        setLogoFile(file)
-        setLogoUrl(URL.createObjectURL(file))
-        setUploadingLogo(true)
+setLogoUrl(URL.createObjectURL(file))
+setUploadingLogo(true)
 
         try {
             const formData = new FormData()

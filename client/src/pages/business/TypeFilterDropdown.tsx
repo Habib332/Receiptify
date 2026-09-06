@@ -23,8 +23,6 @@ export default function TypeFilterDropdown({ value, options, onChange }: TypeFil
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
-
-    const allOptions = ['All Types', ...options]
     const isAllTypes = value === 'All Types'
     const activeIcon = !isAllTypes ? getBusinessIcon(value) : null
 

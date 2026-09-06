@@ -993,10 +993,10 @@ const dailyData = thisMonth.dailyTotals.map((value, index) => ({
                                 />
 
                                 <Tooltip
-                                    formatter={(value: number) =>
-                                        formatAmount(value, thisMonth.currency)
-                                    }
-                                />
+    formatter={(value) =>
+        formatAmount(Number(value), thisMonth.currency)
+    }
+/>
 
                                 <Line
                                     type="monotone"

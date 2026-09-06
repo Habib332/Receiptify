@@ -19,9 +19,26 @@ type BusinessSelectorProps = {
     // switch can't fire before the sessionToken from the first has landed
     // in sessionStorage.
     switching?: boolean
+    // When false, hides the "All Businesses" option entirely — used on
+    // pages (like Scan) where a specific business must be chosen.
+    allowAll?: boolean
+    // Button takes the full width of its container instead of the default
+    // auto/min-width sizing.
+    fullWidth?: boolean
+    // Renders the button with a red border to indicate a validation error.
+    error?: boolean
 }
 
-export default function BusinessSelector({ businesses, selectedId, onChange, loading, switching }: BusinessSelectorProps) {
+export default function BusinessSelector({
+    businesses,
+    selectedId,
+    onChange,
+    loading,
+    switching,
+    allowAll = true,
+    fullWidth,
+    error,
+}: BusinessSelectorProps) {
     const [open, setOpen] = useState(false)
     const ref = useRef<HTMLDivElement>(null)
 
@@ -41,7 +58,9 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
             <button
                 onClick={() => !disabled && setOpen((v) => !v)}
                 disabled={disabled}
-                className="flex items-center gap-2.5 border border-gray-200 rounded-lg pl-2 pr-3 py-2.5 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors w-full sm:w-auto sm:min-w-[200px] disabled:opacity-60 disabled:cursor-wait"
+                className={`flex items-center gap-2.5 border rounded-lg pl-2 pr-3 py-2.5 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-wait ${
+                    fullWidth ? 'w-full' : 'w-full sm:w-auto sm:min-w-[200px]'
+                } ${error ? 'border-red-300' : 'border-gray-200'}`}
             >
                 {selected ? (
                     <span className="w-6 h-6 rounded-md bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
@@ -80,7 +99,9 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
                             ? "Loading..."
                             : selected
                                 ? selected.name
-                                : "All Businesses"}
+                                : allowAll
+                                    ? "All Businesses"
+                                    : "Select a business"}
                 </span>
 
                 <svg
@@ -101,23 +122,27 @@ export default function BusinessSelector({ businesses, selectedId, onChange, loa
 
             {open && (
                 <div className="absolute left-0 top-full mt-1.5 z-20 w-[min(16rem,calc(100vw-2rem))] bg-white border border-gray-100 rounded-xl shadow-lg py-1 max-h-80 overflow-y-auto">
-                    <button
-                        onClick={() => {
-                            onChange('all')
-                            setOpen(false)
-                        }}
-                        className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 text-sm hover:bg-gray-50 ${selectedId === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'
-                            }`}
-                    >
-                        <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                            </svg>
-                        </span>
-                        All Businesses
-                    </button>
+                    {allowAll && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    onChange('all')
+                                    setOpen(false)
+                                }}
+                                className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 text-sm hover:bg-gray-50 ${selectedId === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'
+                                    }`}
+                            >
+                                <span className="w-6 h-6 rounded-md bg-blue-50 text-blue-500 flex items-center justify-center shrink-0">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                                    </svg>
+                                </span>
+                                All Businesses
+                            </button>
 
-                    <div className="border-t border-gray-100 my-1" />
+                            <div className="border-t border-gray-100 my-1" />
+                        </>
+                    )}
 
                     {businesses.length === 0 && (
                         <div className="px-3 py-2 text-xs text-gray-400">No businesses yet</div>

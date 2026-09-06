@@ -299,7 +299,7 @@ export default function BusinessesPage() {
 
     const unreadNotificationCount = notifications.filter((n) => !n.read).length
 
-    const handleAddBusiness = async (data: { name: string; type: string; address: string; phone: string }) => {
+    const handleAddBusiness = async (_data: { name: string; type: string; address: string; phone: string }) => {
         setError('')
         // AddBusinessModal already performed the POST /business (and any
         // logo upload) itself so it could get the new id for the logo

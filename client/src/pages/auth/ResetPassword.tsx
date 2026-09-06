@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import illustration from '../../assets/sign-up.png'
 import ReceiptLogo from '../../logo/MainLogo'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
 export default function ResetPassword() {
-    const navigate = useNavigate()
     const [searchParams] = useSearchParams()
     const token = searchParams.get('token') || ''
 
