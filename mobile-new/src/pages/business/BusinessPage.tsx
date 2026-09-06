@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
     View,
     Text,
@@ -12,7 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Bell } from 'lucide-react-native'
+import { Bell, Building2, Users, Receipt as ReceiptIcon } from 'lucide-react-native'
 import Layout from '../../components/Layout'
 import { getBusinessIcon, businessTypes } from './BusinessIcons'
 import AddBusinessModal from './AddBusinessModal'
@@ -104,6 +104,39 @@ function isPermissionError(status: number, message: string) {
         normalized.includes('owner or manager') ||
         normalized.includes('unauthorized')
     )
+}
+
+// Animates a number counting up from 0 to `value` whenever `value`
+// changes (initial mount, refetch, filter change) — same easing/behavior
+// as Dashboard's useCountUp, so the two screens feel identical.
+function useCountUp(value: number, durationMs = 800) {
+    const [display, setDisplay] = useState(0)
+    const rafRef = useRef<number | null>(null)
+
+    useEffect(() => {
+        const from = 0
+        const to = Number.isFinite(value) ? value : 0
+        const start = Date.now()
+
+        function tick() {
+            const elapsed = Date.now() - start
+            const progress = Math.min(1, elapsed / durationMs)
+            const eased = 1 - Math.pow(1 - progress, 3)
+            setDisplay(from + (to - from) * eased)
+            if (progress < 1) {
+                rafRef.current = requestAnimationFrame(tick)
+            } else {
+                setDisplay(to)
+            }
+        }
+
+        rafRef.current = requestAnimationFrame(tick)
+        return () => {
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+        }
+    }, [value, durationMs])
+
+    return display
 }
 
 const screenWidth = Dimensions.get('window').width
@@ -301,6 +334,15 @@ export default function BusinessPage() {
             ? businesses.filter((b) => !!b.userRole)
             : businesses
     }, [businesses, viewMode])
+
+    // Count of businesses the current user has a role in (owner/manager/
+    // staff) — drives the "Your Businesses" stat card below. Computed
+    // client-side off the already-fetched `businesses` array, same as
+    // distinctTypeCount, so it updates instantly on join/leave/delete.
+    const yourBusinessesCount = useMemo(
+        () => businesses.filter((b) => !!b.userRole).length,
+        [businesses]
+    )
 
     const unreadNotificationCount = notifications.filter((n) => !n.read).length
 
@@ -552,36 +594,8 @@ export default function BusinessPage() {
         await Promise.all([fetchBusinesses(), fetchStats()])
     }
 
-    const overviewStats = [
-        {
-            label: 'Total Businesses',
-            value: statsLoading && businesses.length === 0 ? '—' : String(stats?.totalBusinesses ?? businesses.length),
-            sub: 'Saved',
-            bg: colors.blue50,
-            color: colors.blue600,
-        },
-        {
-            label: 'Most Used',
-            value: statsLoading ? '—' : stats?.mostUsed?.name ?? '—',
-            sub: stats?.mostUsed ? `${stats.mostUsed.receipts} receipts` : '',
-            bg: colors.green50,
-            color: colors.green600,
-        },
-        {
-            label: 'Business Types',
-            value: statsLoading && businesses.length === 0 ? '—' : String(businessTypeCountDisplay),
-            sub: 'Categories',
-            bg: colors.orange50,
-            color: colors.orange500,
-        },
-        {
-            label: 'Total Receipts',
-            value: statsLoading ? '—' : String(stats?.totalReceipts ?? '—'),
-            sub: 'Across all businesses',
-            bg: colors.purple50,
-            color: colors.purple500,
-        },
-    ]
+    const totalBusinessesValue = stats?.totalBusinesses ?? businesses.length
+    const totalReceiptsValue = stats?.totalReceipts ?? 0
 
     return (
         <View style={styles.screen}>
@@ -637,23 +651,34 @@ export default function BusinessPage() {
                     </View>
                 </ImageBackground>
 
-                {/* Overview */}
-                <View style={styles.statsGrid}>
-                    {overviewStats.map((stat) => (
-                        <View key={stat.label} style={[styles.statCard, isWide ? styles.statCardWide : styles.statCardNarrow]}>
-                            <View style={[styles.statIcon, { backgroundColor: stat.bg }]}>
-                                <Icon
-                                    d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25M12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0"
-                                    size={20}
-                                    color={stat.color}
-                                    strokeWidth={1.8}
-                                />
-                            </View>
-                            <Text style={styles.statLabel}>{stat.label}</Text>
-                            <Text style={styles.statValue} numberOfLines={1}>{stat.value}</Text>
-                            <Text style={styles.statSub}>{stat.sub}</Text>
-                        </View>
-                    ))}
+                {/* Stats — same visual language as Dashboard's statsRow:
+                    3 equal-width flex cards, icon in a soft-colored circle,
+                    label/value/sub stack, animated count-up on the number. */}
+                <View style={styles.statsRow}>
+                    <StatCard
+                        label="Total Businesses"
+                        value={totalBusinessesValue}
+                        loading={statsLoading && businesses.length === 0}
+                        sub="Saved"
+                        iconBg={colors.blue50}
+                        icon={<Building2 size={18} color={colors.blue600} />}
+                    />
+                    <StatCard
+                        label="Your Businesses"
+                        value={yourBusinessesCount}
+                        loading={loading && businesses.length === 0}
+                        sub="Owned or joined"
+                        iconBg={colors.green50}
+                        icon={<Users size={18} color={colors.green600} />}
+                    />
+                    <StatCard
+                        label="Total Receipts"
+                        value={totalReceiptsValue}
+                        loading={statsLoading}
+                        sub="Across all businesses"
+                        iconBg={colors.purple50}
+                        icon={<ReceiptIcon size={18} color={colors.purple500} />}
+                    />
                 </View>
 
                 {/* Search + filter */}
@@ -691,7 +716,7 @@ export default function BusinessPage() {
                             </Text>
                             <View style={[styles.toggleCount, viewMode === 'My Businesses' && styles.toggleCountActive]}>
                                 <Text style={viewMode === 'My Businesses' ? styles.toggleCountTextActive : styles.toggleCountText}>
-                                    {businesses.filter((b) => !!b.userRole).length}
+                                    {yourBusinessesCount}
                                 </Text>
                             </View>
                         </TouchableOpacity>
@@ -880,6 +905,42 @@ export default function BusinessPage() {
     )
 }
 
+// Dashboard-style stat card: icon in a soft-colored circle top-left, then
+// label / animated value / sub-caption stacked below. Mirrors Dashboard's
+// StatCard 1:1 so the two screens are visually identical.
+function StatCard({
+    label,
+    value,
+    sub,
+    iconBg,
+    icon,
+    loading,
+    format,
+}: {
+    label: string
+    value: number
+    sub: string
+    iconBg: string
+    icon?: React.ReactNode
+    loading?: boolean
+    format?: (n: number) => string
+}) {
+    const animated = useCountUp(loading ? 0 : value)
+
+    const displayValue = loading ? '—' : format ? format(animated) : Math.round(animated).toLocaleString()
+
+    return (
+        <View style={styles.statCard}>
+            <View style={styles.statCardTopRow}>
+                <View style={[styles.statIconWrap, { backgroundColor: iconBg }]}>{icon}</View>
+            </View>
+            <Text style={styles.statLabel}>{label}</Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{displayValue}</Text>
+            <Text style={styles.statSub}>{sub}</Text>
+        </View>
+    )
+}
+
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
@@ -936,7 +997,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.blue600,
         borderRadius: 20,
         padding: 20,
-        marginBottom: 24,
+        marginBottom: 20,
         overflow: 'hidden',
     },
     heroImageBg: {
@@ -991,47 +1052,24 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
-    statsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 16,
-        marginBottom: 24,
-    },
+    // Dashboard-style stats row: 3 equal-width flex cards, gap-based
+    // spacing, stretched to equal height — replaces the old 4-card
+    // flex-wrap grid (statsGrid/statCardNarrow/statCardWide).
+    statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, alignItems: 'stretch' },
     statCard: {
+        flex: 1,
+        backgroundColor: colors.white,
         borderWidth: 1,
         borderColor: colors.gray100,
         borderRadius: 16,
-        padding: 16,
+        padding: 14,
+        gap: 4,
     },
-    statCardNarrow: {
-        width: '47%',
-    },
-    statCardWide: {
-        width: '23%',
-    },
-    statIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: colors.gray400,
-        marginBottom: 4,
-    },
-    statValue: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: colors.gray900,
-    },
-    statSub: {
-        fontSize: 12,
-        color: colors.gray400,
-        marginTop: 4,
-    },
+    statCardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+    statIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    statLabel: { fontSize: 11, color: colors.gray400 },
+    statValue: { fontSize: 16, fontWeight: '700', color: colors.gray900 },
+    statSub: { fontSize: 10, color: colors.gray400 },
     controlsRow: {
         flexDirection: 'row',
         alignItems: 'center',
