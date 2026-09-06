@@ -5,7 +5,7 @@ const { hashPassword } = require("../../utils/password");
 const ApiError = require("../../utils/apiError");
 
 const TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://receiptify-7q3z.vercel.app";
 
 // SHA-256 is enough here — the token is already a 32-byte random value
 // (high entropy, unguessable), not a low-entropy secret like a password,

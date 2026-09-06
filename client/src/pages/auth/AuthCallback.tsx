@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 // Route this at /auth/callback and set FRONTEND_OAUTH_CALLBACK_URL in the
-// backend .env to match, e.g. http://localhost:5173/auth/callback
+// backend .env to match, e.g. https://receiptify-7q3z.vercel.app/auth/callback
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
