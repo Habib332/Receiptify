@@ -25,6 +25,7 @@ import DeleteConfirmModal from './DeleteConfirmModal'
 import LeaveBusinessModal from './LeaveBusinessModal'
 import TeamModal from './TeamModel'
 import BusinessDetailsSheet from './BusinessDetailsSheet'
+import BusinessSkeleton from './BusinessSkeleton'
 import Icon from '../../components/Icon'
 import { colors } from '../../theme/colors'
 import { API_BASE_URL, authHeaders, getToken } from '../../api/config'
@@ -596,6 +597,15 @@ export default function BusinessPage() {
 
     const totalBusinessesValue = stats?.totalBusinesses ?? businesses.length
     const totalReceiptsValue = stats?.totalReceipts ?? 0
+
+    // Only show the full-screen skeleton on the very first load (no data
+    // yet, still fetching). Subsequent search/filter/stat refetches keep
+    // the existing list/cards on screen rather than blanking the page.
+    const isInitialLoading = (loading || statsLoading) && businesses.length === 0 && stats === null
+
+    if (isInitialLoading) {
+        return <BusinessSkeleton />
+    }
 
     return (
         <View style={styles.screen}>

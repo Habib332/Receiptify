@@ -46,6 +46,7 @@ import EditReceiptModal, { type EditableReceiptFields } from './EditReceiptModal
 import BusinessSelector, { type BusinessOption } from './BusinessSelector'
 import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
 import MiniLineChart from './MiniLineChart'
+import DashboardSkeleton from './DashboardSkeleton'
 import { API_BASE_URL, getToken, setToken, jsonHeaders, authHeaders } from '../../api/config'
 import { Paths } from 'expo-file-system'
 
@@ -713,6 +714,20 @@ export default function Dashboard() {
     const menuRow = pageReceipts.find((r) => r.receipt_id === openMenuId) || null
 
     const isEmpty = !loading && !switchingBusiness && receipts.length === 0
+
+    // Only show the full-screen skeleton on the very first load — no
+    // receipts and no stats yet, and we're actively fetching. Subsequent
+    // business switches / filter refetches keep the current table on
+    // screen (they already show their own inline loading row instead).
+    const isInitialLoading =
+        (loading || statsLoading || businessesLoading) &&
+        receipts.length === 0 &&
+        stats === null &&
+        businesses.length === 0
+
+    if (isInitialLoading) {
+        return <DashboardSkeleton />
+    }
 
     return (
         <View style={styles.screen}>
