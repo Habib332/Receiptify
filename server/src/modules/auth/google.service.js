@@ -1,6 +1,7 @@
 const authRepository = require("./auth.repository");
 const googleOAuth = require("../../utils/googleOAuth");
 const { generateIdentityToken } = require("../../utils/jwt");
+const { mirrorGoogleAvatar } = require("../../utils/avatarStorage");
 const ApiError = require("../../utils/apiError");
 
 /*
@@ -67,6 +68,17 @@ async function handleCallback(code) {
         avatarUrl,
       });
     }
+  }
+
+  // Mirror the Google avatar to our own storage on every login (new or
+  // returning user) so avatar_url never points directly at Google's
+  // lh3.googleusercontent.com, which is not reliably stable long-term
+  // (the size-suffixed URL variant has been observed failing intermittently,
+  // and the underlying token can rotate/expire). Never blocks login if
+  // the mirror fails — user just keeps whatever avatar_url they had.
+  const mirroredAvatarUrl = await mirrorGoogleAvatar(user.user_id, avatarUrl);
+  if (mirroredAvatarUrl) {
+    user = await authRepository.updateAvatarUrl(user.user_id, mirroredAvatarUrl);
   }
 
   const identityToken = generateIdentityToken({ userId: user.user_id });

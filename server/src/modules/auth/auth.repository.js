@@ -113,7 +113,20 @@ async function consumeExchangeCode(code) {
   return result.rows[0];
 }
 
-
+// Overwrites avatar_url unconditionally — used after mirroring the
+// Google avatar to our own storage on every login, so it always reflects
+// the freshest copy regardless of what linkGoogleAccount/createGoogleUser
+// originally set.
+async function updateAvatarUrl(userId, avatarUrl) {
+  const result = await pool.query(
+    `UPDATE users
+     SET avatar_url = $2
+     WHERE user_id = $1
+     RETURNING user_id, name, email, created_at, google_id, avatar_url, auth_provider`,
+    [userId, avatarUrl],
+  );
+  return result.rows[0];
+}
 
 module.exports = {
   createUser,
@@ -126,4 +139,5 @@ module.exports = {
   linkGoogleAccount,
   createExchangeCode,
   consumeExchangeCode,
+  updateAvatarUrl,
 };
