@@ -28,6 +28,7 @@ interface RawBusiness {
     logo_url?: string | null
     userRole?: string | null
     user_role?: string | null
+    role?: string | null
 }
 
 interface PendingFile {
@@ -83,13 +84,21 @@ export default function ScanBulkUpload() {
                 throw new Error(data.message || 'Failed to load businesses')
             }
 
-            const normalized: BusinessOption[] = (data.data || []).map((b: RawBusiness) => ({
-                id: String(b.id ?? b.business_id),
-                name: b.name,
-                type: b.type ?? '',
-                logoUrl: b.logoUrl ?? b.logo_url ?? null,
-                userRole: b.userRole ?? b.user_role ?? null,
-            }))
+            // GET /business returns every business in the system (used
+            // elsewhere for search/join flows), not just the ones this
+            // user belongs to — userRole/user_role/role is only set on
+            // businesses the user actually has a role in, so we filter
+            // down to those. Same pattern as Dashboard.tsx's
+            // fetchBusinesses.
+            const normalized: BusinessOption[] = (data.data || [])
+                .map((b: RawBusiness) => ({
+                    id: String(b.id ?? b.business_id),
+                    name: b.name,
+                    type: b.type ?? '',
+                    logoUrl: b.logoUrl ?? b.logo_url ?? null,
+                    userRole: b.userRole ?? b.user_role ?? b.role ?? null,
+                }))
+                .filter((b: BusinessOption) => !!b.userRole)
 
             setBusinesses(normalized)
             if (normalized.length === 1) {
