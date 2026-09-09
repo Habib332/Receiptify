@@ -333,23 +333,35 @@ export default function ScanBulkReview() {
         })
     }
 
-    const goNext = () => {
+    const goNext = (finalOutcomeForCurrent: ReceiptOutcome) => {
         if (currentIndex < total - 1) {
             setCurrentIndex((i) => i + 1)
         } else {
-            navigation.navigate('Dashboard')
+            const finalOutcomes = outcomes.map((o, i) => (i === currentIndex ? finalOutcomeForCurrent : o))
+            const savedTotal = finalOutcomes.filter((o) => o === 'saved').length
+            // FIX: Navigate to MainTabs with Dashboard screen
+            navigation.navigate('MainTabs', {
+                screen: 'Dashboard',
+                params: {
+                    toast: {
+                        variant: 'success',
+                        message:
+                            savedTotal === total
+                                ? `All ${total} receipts saved`
+                                : `${savedTotal} of ${total} receipts saved`,
+                    },
+                },
+            })
         }
     }
-
     const goPrevious = () => {
         if (currentIndex > 0) setCurrentIndex((i) => i - 1)
     }
 
     const handleSkip = () => {
         setOutcome(currentIndex, 'skipped')
-        goNext()
+        goNext('skipped')
     }
-
     const handleSubmit = async () => {
         setError('')
 
@@ -393,7 +405,7 @@ export default function ScanBulkReview() {
             }
 
             setOutcome(currentIndex, 'saved')
-            goNext()
+            goNext('saved')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {

@@ -365,7 +365,12 @@ export default function ScanReview() {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            navigation.goBack()
+            navigation.navigate('MainTabs', {
+                screen: 'Dashboard',
+                params: {
+                    toast: { variant: 'success', message: 'Receipt saved successfully' },
+                },
+            })
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {

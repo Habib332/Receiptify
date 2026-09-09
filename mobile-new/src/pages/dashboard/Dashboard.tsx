@@ -47,6 +47,7 @@ import BusinessSelector, { type BusinessOption } from './BusinessSelector'
 import NotificationsModal, { type NotificationItem } from '../business/NotificationModal'
 import MiniLineChart from './MiniLineChart'
 import DashboardSkeleton from './DashboardSkeleton'
+import Toast, { type ToastConfig } from '../../components/Toast'
 import { API_BASE_URL, getToken, setToken, jsonHeaders, authHeaders } from '../../api/config'
 import { Paths } from 'expo-file-system'
 
@@ -152,6 +153,11 @@ function useCountUp(value: number, durationMs = 800) {
 
 type DashboardRouteParams = {
     businessId?: string
+    // Passed by ScanReview / ScanBulkReview after a successful save so
+    // Dashboard can surface a confirmation toast post-redirect (the Scan
+    // screens unmount immediately on navigate, so they can't show it
+    // themselves).
+    toast?: { variant: 'success' | 'error'; message: string }
 }
 
 type Route = RouteProp<MainTabParamList, 'Dashboard'>
@@ -163,6 +169,7 @@ export default function Dashboard() {
     // React Navigation's equivalent is a route param instead of router state.
     const route = useRoute<Route>()
     const businessIdFromNavigation = (route.params as DashboardRouteParams | undefined)?.businessId
+    const toastFromNavigation = (route.params as DashboardRouteParams | undefined)?.toast
     const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>()
 
     const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -202,6 +209,11 @@ export default function Dashboard() {
     const [notificationsLoading, setNotificationsLoading] = useState(false)
 
     const [showThisMonthChart, setShowThisMonthChart] = useState(false)
+
+    // Post-save confirmation toast, populated from the incoming route
+    // param (see the effect below) and cleared automatically by <Toast />
+    // after it auto-dismisses.
+    const [toast, setToast] = useState<ToastConfig>(null)
 
     const fetchBusinesses = useCallback(async () => {
         setBusinessesLoading(true)
@@ -469,6 +481,18 @@ export default function Dashboard() {
         }, [fetchBusinesses])
     )
 
+    // Post-save confirmation toast: ScanReview / ScanBulkReview navigate
+    // here with a `toast` param immediately after a successful save (they
+    // unmount right away, so they can't show their own toast — this screen
+    // has to render it instead). Consume it into local state, then clear
+    // the param so navigating back to Dashboard later (e.g. via the tab
+    // bar) doesn't replay the same toast.
+    useEffect(() => {
+        if (!toastFromNavigation) return
+        setToast(toastFromNavigation)
+        navigation.setParams({ toast: undefined } as never)
+    }, [toastFromNavigation])
+
     useEffect(() => {
         if (!businessIdFromNavigation) return
         if (businesses.length === 0) return
@@ -731,6 +755,11 @@ export default function Dashboard() {
 
     return (
         <View style={styles.screen}>
+            {/* Post-save confirmation toast — populated from the incoming
+                `toast` route param (see effect above), auto-dismisses on
+                its own via Toast's internal timer. */}
+            <Toast toast={toast} onHide={() => setToast(null)} top={insets.top + 8} />
+
             {/* Pinned header: sits outside Layout's internal ScrollView, so
                 it stays fixed while Layout's children (everything below)
                 scroll underneath it. Mirrors UserProfileModal's header,
