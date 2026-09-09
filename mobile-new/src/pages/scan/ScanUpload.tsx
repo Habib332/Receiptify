@@ -9,7 +9,7 @@ import {
     ScrollView,
 } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Path, Circle, Rect } from 'react-native-svg'
@@ -157,7 +157,7 @@ export default function ScanUpload() {
                 logoUrl: b.logoUrl ?? b.logo_url ?? null,
                 userRole: b.userRole ?? b.user_role ?? null,
             }))
-            .filter((b: BusinessOption) => !!b.userRole)
+                .filter((b: BusinessOption) => !!b.userRole)
 
             setBusinesses(normalized)
             // Auto-fill if there's exactly one option — user can still
@@ -173,9 +173,11 @@ export default function ScanUpload() {
         }
     }, [])
 
-    useEffect(() => {
-        fetchBusinesses()
-    }, [fetchBusinesses])
+    useFocusEffect(
+        useCallback(() => {
+            fetchBusinesses()
+        }, [fetchBusinesses])
+    )
 
     const handlePicked = (asset: ImagePicker.ImagePickerAsset) => {
         setError('')
@@ -339,114 +341,114 @@ export default function ScanUpload() {
             </View>
 
             <Layout>
-            {/* Upload mode toggle */}
-            <View style={styles.toggleWrap}>
-                <UploadModeToggle mode="single" />
-            </View>
-
-            {/* Step indicator */}
-            <View style={styles.stepRow}>
-                <View style={styles.stepItem}>
-                    <View style={[styles.stepBadge, styles.stepBadgeActive]}>
-                        <Text style={styles.stepBadgeTextActive}>1</Text>
-                    </View>
-                    <Text style={styles.stepLabelActive}>Upload</Text>
+                {/* Upload mode toggle */}
+                <View style={styles.toggleWrap}>
+                    <UploadModeToggle mode="single" />
                 </View>
-                <View style={styles.stepDivider} />
-                <View style={styles.stepItem}>
-                    <View style={styles.stepBadge}>
-                        <Text style={styles.stepBadgeText}>2</Text>
+
+                {/* Step indicator */}
+                <View style={styles.stepRow}>
+                    <View style={styles.stepItem}>
+                        <View style={[styles.stepBadge, styles.stepBadgeActive]}>
+                            <Text style={styles.stepBadgeTextActive}>1</Text>
+                        </View>
+                        <Text style={styles.stepLabelActive}>Upload</Text>
                     </View>
-                    <Text style={styles.stepLabel}>Review</Text>
-                </View>
-            </View>
-
-            {/* Business selector */}
-            <View style={styles.fieldBlock}>
-                <Text style={styles.fieldLabel}>Business</Text>
-                <BusinessSelector
-                    businesses={businesses}
-                    selectedId={selectedBusinessId}
-                    onChange={(id) => {
-                        if (id === 'all') return
-                        setSelectedBusinessId(id)
-                        if (fieldErrors.businessId) setFieldErrors((prev) => ({ ...prev, businessId: undefined }))
-                    }}
-                    loading={businessesLoading}
-                />
-                {fieldErrors.businessId && <Text style={styles.errorText}>{fieldErrors.businessId}</Text>}
-            </View>
-
-            {error && (
-                <View style={styles.errorBanner}>
-                    <Text style={styles.errorBannerText}>{error}</Text>
-                </View>
-            )}
-
-            {!preview ? (
-                <View style={styles.dropzone}>
-                    <View style={styles.dropzoneIconWrap}>
-                        <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={1.6}>
-                            <Path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
-                            />
-                        </Svg>
+                    <View style={styles.stepDivider} />
+                    <View style={styles.stepItem}>
+                        <View style={styles.stepBadge}>
+                            <Text style={styles.stepBadgeText}>2</Text>
+                        </View>
+                        <Text style={styles.stepLabel}>Review</Text>
                     </View>
-                    <Text style={styles.dropzoneTitle}>Add your receipt</Text>
-                    <Text style={styles.dropzoneSubtitle}>Choose an option below. JPG, PNG up to 10MB.</Text>
+                </View>
 
-                    <View style={styles.dropzoneButtons}>
-                        <TouchableOpacity onPress={pickFromLibrary} style={styles.primaryButton}>
-                            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
-                                <Path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                            </Svg>
-                            <Text style={styles.primaryButtonText}>Upload file</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={pickFromCamera} style={styles.secondaryButton}>
-                            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth={1.8}>
+                {/* Business selector */}
+                <View style={styles.fieldBlock}>
+                    <Text style={styles.fieldLabel}>Business</Text>
+                    <BusinessSelector
+                        businesses={businesses}
+                        selectedId={selectedBusinessId}
+                        onChange={(id) => {
+                            if (id === 'all') return
+                            setSelectedBusinessId(id)
+                            if (fieldErrors.businessId) setFieldErrors((prev) => ({ ...prev, businessId: undefined }))
+                        }}
+                        loading={businessesLoading}
+                    />
+                    {fieldErrors.businessId && <Text style={styles.errorText}>{fieldErrors.businessId}</Text>}
+                </View>
+
+                {error && (
+                    <View style={styles.errorBanner}>
+                        <Text style={styles.errorBannerText}>{error}</Text>
+                    </View>
+                )}
+
+                {!preview ? (
+                    <View style={styles.dropzone}>
+                        <View style={styles.dropzoneIconWrap}>
+                            <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth={1.6}>
                                 <Path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38 0-.753-.116-1.076-.334a2.32 2.32 0 01-.734-.847 2.29 2.29 0 01-.239-1.089 2.31 2.31 0 01.334-1.076c.19-.319.462-.573.79-.734a2.29 2.29 0 011.089-.239h13.42a2.29 2.29 0 011.089.239c.328.161.6.415.79.734.19.319.316.68.334 1.076a2.29 2.29 0 01-.239 1.089 2.32 2.32 0 01-.734.847 2.31 2.31 0 01-1.076.334 2.31 2.31 0 01-1.641-1.055M6.827 6.175L3.75 20.25h16.5L17.173 6.175M6.827 6.175h10.346"
+                                    d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
                                 />
-                                <Circle cx={12} cy={13} r={2.75} />
                             </Svg>
-                            <Text style={styles.secondaryButtonText}>Use camera</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            ) : (
-                <View>
-                    <View style={styles.previewCard}>
-                        <Image source={{ uri: preview }} style={styles.previewImage} resizeMode="contain" />
-                        <View style={styles.previewFooter}>
-                            <View style={styles.previewFileRow}>
-                                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.8}>
-                                    <Path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 10.5h.008v.008H18V10.5zm-12-6h12a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 016 4.5z" />
+                        </View>
+                        <Text style={styles.dropzoneTitle}>Add your receipt</Text>
+                        <Text style={styles.dropzoneSubtitle}>Choose an option below. JPG, PNG up to 10MB.</Text>
+
+                        <View style={styles.dropzoneButtons}>
+                            <TouchableOpacity onPress={pickFromLibrary} style={styles.primaryButton}>
+                                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={2}>
+                                    <Path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                                 </Svg>
-                                <Text style={styles.previewFileName} numberOfLines={1}>{fileName}</Text>
-                            </View>
-                            <TouchableOpacity onPress={handleReset}>
-                                <Text style={styles.removeText}>Remove</Text>
+                                <Text style={styles.primaryButtonText}>Upload file</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={pickFromCamera} style={styles.secondaryButton}>
+                                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth={1.8}>
+                                    <Path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38 0-.753-.116-1.076-.334a2.32 2.32 0 01-.734-.847 2.29 2.29 0 01-.239-1.089 2.31 2.31 0 01.334-1.076c.19-.319.462-.573.79-.734a2.29 2.29 0 011.089-.239h13.42a2.29 2.29 0 011.089.239c.328.161.6.415.79.734.19.319.316.68.334 1.076a2.29 2.29 0 01-.239 1.089 2.32 2.32 0 01-.734.847 2.31 2.31 0 01-1.076.334 2.31 2.31 0 01-1.641-1.055M6.827 6.175L3.75 20.25h16.5L17.173 6.175M6.827 6.175h10.346"
+                                    />
+                                    <Circle cx={12} cy={13} r={2.75} />
+                                </Svg>
+                                <Text style={styles.secondaryButtonText}>Use camera</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
+                ) : (
+                    <View>
+                        <View style={styles.previewCard}>
+                            <Image source={{ uri: preview }} style={styles.previewImage} resizeMode="contain" />
+                            <View style={styles.previewFooter}>
+                                <View style={styles.previewFileRow}>
+                                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.8}>
+                                        <Path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M18 10.5h.008v.008H18V10.5zm-12-6h12a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0118 18.75H6a2.25 2.25 0 01-2.25-2.25V6.75A2.25 2.25 0 016 4.5z" />
+                                    </Svg>
+                                    <Text style={styles.previewFileName} numberOfLines={1}>{fileName}</Text>
+                                </View>
+                                <TouchableOpacity onPress={handleReset}>
+                                    <Text style={styles.removeText}>Remove</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
-                    <TouchableOpacity
-                        onPress={handleContinue}
-                        disabled={submitting}
-                        style={[styles.continueButton, submitting && styles.continueButtonDisabled]}
-                    >
-                        {submitting ? (
-                            <ActivityIndicator color="#ffffff" />
-                        ) : (
-                            <Text style={styles.continueButtonText}>Continue to review</Text>
-                        )}
-                    </TouchableOpacity>
-                </View>
-            )}
+                        <TouchableOpacity
+                            onPress={handleContinue}
+                            disabled={submitting}
+                            style={[styles.continueButton, submitting && styles.continueButtonDisabled]}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator color="#ffffff" />
+                            ) : (
+                                <Text style={styles.continueButtonText}>Continue to review</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
             </Layout>
         </View>
     )
