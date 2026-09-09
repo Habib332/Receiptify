@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../../components/Layout'
+import { queueSuccessToast, showErrorToast } from '../../components/Toast' // adjust path to match your actual Toast location
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
@@ -213,20 +214,43 @@ export default function ScanBulkReview() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [polling, receipt.receipt_id])
 
-    const setOutcome = (index: number, outcome: ReceiptOutcome) => {
-        setOutcomes((prev) => {
-            const next = [...prev]
-            next[index] = outcome
-            return next
-        })
-    }
+    // Advances past the current receipt, recording its outcome, and — if
+    // this was the last one — fires the summary toast and redirects to
+    // the dashboard. Takes the outcome as a parameter (rather than relying
+    // on the `outcomes` state var) so the final tally isn't racing the
+    // pending setOutcomes update for the receipt we're finishing right now.
+    const finishStep = (index: number, outcome: ReceiptOutcome) => {
+        const nextOutcomes = [...outcomes]
+        nextOutcomes[index] = outcome
+        setOutcomes(nextOutcomes)
 
-    const goNext = () => {
-        if (currentIndex < total - 1) {
+        if (index < total - 1) {
             setCurrentIndex((i) => i + 1)
-        } else {
-            navigate('/dashboard')
+            return
         }
+
+        const saved = nextOutcomes.filter((o) => o === 'saved').length
+        const skipped = nextOutcomes.filter((o) => o === 'skipped').length
+
+        if (saved === 0) {
+            // Everything in the batch was skipped — nothing was actually
+            // saved, so send the user back to try again rather than
+            // celebrating an empty result.
+            showErrorToast(
+                'No receipts saved',
+                'Every receipt in this batch was skipped.',
+            )
+            navigate('/scan/bulk')
+            return
+        }
+
+        queueSuccessToast(
+            'Batch reviewed',
+            skipped > 0
+                ? `${saved} receipt${saved === 1 ? '' : 's'} saved, ${skipped} skipped`
+                : `${saved} receipt${saved === 1 ? '' : 's'} saved`,
+        )
+        navigate('/dashboard')
     }
 
     const goPrevious = () => {
@@ -234,8 +258,7 @@ export default function ScanBulkReview() {
     }
 
     const handleSkip = () => {
-        setOutcome(currentIndex, 'skipped')
-        goNext()
+        finishStep(currentIndex, 'skipped')
     }
 
     const handleSubmit = async (e: FormEvent) => {
@@ -280,9 +303,10 @@ export default function ScanBulkReview() {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            setOutcome(currentIndex, 'saved')
-            goNext()
+            finishStep(currentIndex, 'saved')
         } catch (err) {
+            // Inline error only — this receipt is still on screen, nothing
+            // has navigated, so a toast isn't needed here.
             setError(err instanceof Error ? err.message : 'Failed to save receipt')
         } finally {
             setSaving(false)

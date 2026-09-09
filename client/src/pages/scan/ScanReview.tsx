@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Layout from '../../components/Layout'
+import { queueSuccessToast, queueErrorToast } from '../../components/Toast'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
@@ -267,9 +268,18 @@ export default function ScanReview() {
                 throw new Error(result.message || 'Failed to save receipt')
             }
 
-            navigate('/scan')
+            // Success: queue a toast (survives the redirect via
+            // sessionStorage) and send the user to the dashboard instead
+            // of back to the scan upload step.
+            queueSuccessToast('Receipt saved', 'Your receipt has been added to the dashboard.')
+            navigate('/dashboard')
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save receipt')
+            const message = err instanceof Error ? err.message : 'Failed to save receipt'
+            setError(message)
+            // Error: queue a toast too, since we're navigating away —
+            // an in-page toast would just get unmounted before it's seen.
+            queueErrorToast('Could not save receipt', message)
+            navigate('/scan')
         } finally {
             setSaving(false)
         }

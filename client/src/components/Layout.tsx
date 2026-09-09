@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import MainLogo from '../logo/MainLogo'
 import UserProfileModal from '../pages/profile/UserProfileModal'
+import Toast from './Toast'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://receiptify-zeta.vercel.app/api'
 
@@ -257,6 +258,11 @@ export default function Layout({ children }: Props) {
 
     return (
         <div className="h-screen w-full bg-white flex overflow-hidden">
+            {/* Toast notifications — mounted once here so they render above
+                every page and survive redirects (via sessionStorage) as
+                well as same-page fetch errors/success. */}
+            <Toast />
+
             {/* Mobile top bar — only visible below md, sits above the scrolling content */}
             <div className="md:hidden fixed top-0 inset-x-0 h-14 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-30">
                 <button
