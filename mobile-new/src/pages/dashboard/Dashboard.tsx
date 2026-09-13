@@ -13,7 +13,13 @@ import {
     Linking,
     Platform,
 } from 'react-native'
-import * as FileSystem from 'expo-file-system'
+import { File, Directory, Paths } from 'expo-file-system'
+// SAF (Storage Access Framework) is Android-only and lives only in the
+// legacy namespace — the new File/Directory/Paths API has no equivalent
+// for writing into a user-chosen public folder (e.g. Downloads), since
+// apps can't touch that location directly under scoped storage. It's
+// still fully supported (not deprecated) for exactly this reason.
+import { StorageAccessFramework, EncodingType } from 'expo-file-system/legacy'
 
 import * as Sharing from 'expo-sharing'
 import { useRoute, useFocusEffect, useNavigation, type RouteProp } from '@react-navigation/native'
@@ -49,7 +55,6 @@ import MiniLineChart from './MiniLineChart'
 import DashboardSkeleton from './DashboardSkeleton'
 import Toast, { type ToastConfig } from '../../components/Toast'
 import { API_BASE_URL, getToken, setToken, jsonHeaders, authHeaders } from '../../api/config'
-import { Paths } from 'expo-file-system'
 
 const DashboardHeroImage = require('../../../assets/Dashboard.png')
 
@@ -203,6 +208,11 @@ export default function Dashboard() {
 
     const [showExportMenu, setShowExportMenu] = useState(false)
     const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null)
+    // Separate loading flag for the "Save to device" action (Android SAF
+    // flow) so it can show its own spinner independently of the share-sheet
+    // export above — the two can't run at the same time but they're
+    // triggered from different menu items.
+    const [savingFormat, setSavingFormat] = useState<ExportFormat | null>(null)
 
     const [showNotifications, setShowNotifications] = useState(false)
     const [notifications, setNotifications] = useState<NotificationItem[]>([])
@@ -644,46 +654,127 @@ export default function Dashboard() {
         }
     }
 
-    // Same GET /receipts/export?format=... contract as web. The browser's
-    // blob-download-via-<a> dance has no RN equivalent, so this instead
-    // writes the response to a temp file with expo-file-system and hands
-    // it to the OS share sheet via expo-sharing (the standard RN pattern
-    // for "save/share a downloaded file").
+    // MIME types for the SAF createFileAsync call below — SAF needs an
+    // explicit MIME type to hand the right file type to the picker/other
+    // apps, unlike downloadFileAsync which doesn't care.
+    const EXPORT_MIME_TYPES: Record<ExportFormat, string> = {
+        csv: 'text/csv',
+        excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        pdf: 'application/pdf',
+    }
+
+    // Shared by both export paths below: resolves the session, builds the
+    // filtered export URL, and downloads the file into the app's cache
+    // directory. Same GET /receipts/export?format=... contract as web —
+    // the browser's blob-download-via-<a> dance has no RN equivalent, so
+    // this downloads to a local file first (via the SDK 54 File API) and
+    // each caller decides what to do with it afterwards (share sheet vs.
+    // SAF save).
+    //
+    // NOTE: previously this used the legacy `FileSystem.downloadAsync`
+    // imported off the *new* expo-file-system default export, which no
+    // longer exists there in SDK 54 (it moved to the deprecated shim /
+    // `expo-file-system/legacy`) — that mismatch was throwing the
+    // "downloadAsync is deprecated" runtime error on mobile while the web
+    // export (plain fetch + blob) was unaffected. File.downloadFileAsync
+    // is the SDK 54 replacement: it accepts a `File`/`Directory`
+    // destination plus a `headers` option, and — unlike the old call —
+    // rejects on non-2xx responses instead of silently saving a JSON
+    // error body as if it were the exported file.
+    const downloadExportToCache = async (format: ExportFormat) => {
+        await ensureSessionForReceipt(selectedBusinessId === 'all' ? '' : selectedBusinessId)
+
+        const params = new URLSearchParams()
+        params.set('format', format)
+        if (referenceSearch.trim()) params.set('reference', referenceSearch.trim())
+        if (dateFrom) params.set('dateFrom', dateFrom)
+        if (dateTo) params.set('dateTo', dateTo)
+        if (minAmount) params.set('minAmount', minAmount)
+        if (maxAmount) params.set('maxAmount', maxAmount)
+
+        const token = await getToken()
+        const url = `${API_BASE_URL}/receipts/export?${params.toString()}`
+        const extension = format === 'excel' ? 'xlsx' : format
+        const destination = new File(Paths.cache, `receipts-export-${Date.now()}.${extension}`)
+
+        return File.downloadFileAsync(url, destination, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+    }
+
+    // "Export" — hands the downloaded file to the OS share sheet via
+    // expo-sharing, letting the user pick WhatsApp, Gmail, Drive, etc.
+    // On Android, the share sheet often has no plain "Save to Files /
+    // Downloads" target (that's an OS/OEM quirk, not something this app
+    // controls) — "Save to device" below covers that case directly.
     const handleExport = async (format: ExportFormat) => {
         setShowExportMenu(false)
         setExportingFormat(format)
         setError('')
         try {
-            await ensureSessionForReceipt(selectedBusinessId === 'all' ? '' : selectedBusinessId)
-
-            const params = new URLSearchParams()
-            params.set('format', format)
-            if (referenceSearch.trim()) params.set('reference', referenceSearch.trim())
-            if (dateFrom) params.set('dateFrom', dateFrom)
-            if (dateTo) params.set('dateTo', dateTo)
-            if (minAmount) params.set('minAmount', minAmount)
-            if (maxAmount) params.set('maxAmount', maxAmount)
-
-            const token = await getToken()
-            const url = `${API_BASE_URL}/receipts/export?${params.toString()}`
-            const extension = format === 'excel' ? 'xlsx' : format
-           const fileUri = `${Paths.cache}/receipts-export-${Date.now()}.${extension}`;
-
-            const downloadRes = await FileSystem.downloadAsync(url, fileUri, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
-            })
-
-            if (downloadRes.status < 200 || downloadRes.status >= 300) {
-                throw new Error('Failed to export receipts')
-            }
-
+            const downloadedFile = await downloadExportToCache(format)
             if (await Sharing.isAvailableAsync()) {
-                await Sharing.shareAsync(downloadRes.uri)
+                await Sharing.shareAsync(downloadedFile.uri)
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong exporting receipts')
         } finally {
             setExportingFormat(null)
+        }
+    }
+
+    // "Save to device" (Android only) — writes the exported file straight
+    // into a folder the user picks via the system directory picker, using
+    // the Storage Access Framework. This is the direct equivalent of the
+    // web version's browser download, and doesn't depend on any app
+    // registering itself as a share target the way handleExport does.
+    //
+    // The directory picker is shown every time here for simplicity and
+    // correctness (a previously-granted URI can become invalid if the
+    // user clears app data, uninstalls a linked app, etc.) — if repeated
+    // prompts turn out to be annoying in practice, the granted
+    // permissions.directoryUri can be cached (e.g. in SecureStore) and
+    // reused until SAF reports it's no longer valid.
+    const handleSaveToDevice = async (format: ExportFormat) => {
+        setShowExportMenu(false)
+
+        if (Platform.OS !== 'android') {
+            // iOS has no public "Downloads"-style folder apps can write to
+            // directly — Save to Files there goes through the share sheet,
+            // which handleExport already covers via the Files app target.
+            await handleExport(format)
+            return
+        }
+
+        setSavingFormat(format)
+        setError('')
+        try {
+            const downloadedFile = await downloadExportToCache(format)
+
+            const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync()
+            if (!permissions.granted) {
+                return
+            }
+
+            const base64 = await downloadedFile.base64()
+            const extension = format === 'excel' ? 'xlsx' : format
+            const downloadedFileName = decodeURIComponent(downloadedFile.uri.split('/').pop() ?? 'receipts-export')
+            const fileNameWithoutExtension = downloadedFileName.replace(/\.[^/.]+$/, '')
+
+            const destinationUri = await StorageAccessFramework.createFileAsync(
+                permissions.directoryUri,
+                fileNameWithoutExtension,
+                EXPORT_MIME_TYPES[format]
+            )
+            await StorageAccessFramework.writeAsStringAsync(destinationUri, base64, {
+                encoding: EncodingType.Base64,
+            })
+
+            setToast({ variant: 'success', message: `Saved receipts-export.${extension} to device` })
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong saving receipts')
+        } finally {
+            setSavingFormat(null)
         }
     }
 
@@ -949,13 +1040,14 @@ export default function Dashboard() {
                         <View style={{ flex: 1 }}>
                             <TouchableOpacity
                                 onPress={() => setShowExportMenu((v) => !v)}
-                                disabled={selectedBusinessId === 'all' || exportingFormat !== null}
+                                disabled={selectedBusinessId === 'all' || exportingFormat !== null || savingFormat !== null}
                                 style={[
                                     styles.exportButton,
-                                    (selectedBusinessId === 'all' || exportingFormat !== null) && styles.disabledOpacity,
+                                    (selectedBusinessId === 'all' || exportingFormat !== null || savingFormat !== null) &&
+                                        styles.disabledOpacity,
                                 ]}
                             >
-                                {exportingFormat ? (
+                                {exportingFormat || savingFormat ? (
                                     <ActivityIndicator size="small" color="#9CA3AF" />
                                 ) : (
                                     <Download size={16} color="#374151" />
@@ -967,17 +1059,72 @@ export default function Dashboard() {
                     </View>
                 </View>
 
+                {/* Export menu — each format row has two actions: "Share"
+                    opens the OS share sheet (WhatsApp, Gmail, Drive, etc.
+                    via expo-sharing), and "Save" writes the file directly
+                    to a folder the user picks (Android SAF picker; falls
+                    back to the share sheet on iOS, where there's no
+                    equivalent direct-write API). Kept as two explicit
+                    actions rather than folded into one button because the
+                    share sheet doesn't reliably offer a plain
+                    "save/download" target on Android.
+
+                    LAYOUT FIX: the label column (styles.exportMenuLabel)
+                    now has a fixed width instead of sizing to its own
+                    text, so "CSV" / "Excel (XLSX)" / "PDF" all reserve the
+                    same horizontal space regardless of string length. The
+                    actions group (styles.exportMenuActions) is pinned
+                    immediately after that fixed-width column rather than
+                    being pushed around by justifyContent: 'space-between',
+                    and each action button (styles.exportMenuActionButton)
+                    now uses a fixed `width` instead of `minWidth` so
+                    "Share" and "Save" occupy identical-width buttons on
+                    every row. The net effect: the Share column and the
+                    Save column each line up vertically across all three
+                    rows, independent of label length. */}
                 <Modal transparent animationType="fade" visible={showExportMenu} onRequestClose={() => setShowExportMenu(false)}>
                     <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowExportMenu(false)}>
-                        <View style={styles.exportMenu}>
-                            {(['csv', 'excel', 'pdf'] as ExportFormat[]).map((fmt) => (
-                                <TouchableOpacity key={fmt} onPress={() => handleExport(fmt)} style={styles.exportMenuItem}>
-                                    <Text style={styles.exportMenuItemText}>
-                                        {fmt === 'csv' ? 'CSV' : fmt === 'excel' ? 'Excel (XLSX)' : 'PDF'}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                        <TouchableOpacity activeOpacity={1} style={styles.exportMenu}>
+                            {(['csv', 'excel', 'pdf'] as ExportFormat[]).map((fmt) => {
+                                const label = fmt === 'csv' ? 'CSV' : fmt === 'excel' ? 'Excel (XLSX)' : 'PDF'
+                                const isExportingThis = exportingFormat === fmt
+                                const isSavingThis = savingFormat === fmt
+                                const disabled = exportingFormat !== null || savingFormat !== null
+                                return (
+                                    <View key={fmt} style={styles.exportMenuRow}>
+                                        <Text style={styles.exportMenuLabel} numberOfLines={1}>
+                                            {label}
+                                        </Text>
+                                        <View style={styles.exportMenuActions}>
+                                            <TouchableOpacity
+                                                onPress={() => handleExport(fmt)}
+                                                disabled={disabled}
+                                                style={[styles.exportMenuActionButton, disabled && styles.disabledOpacity]}
+                                                accessibilityLabel={`Share ${label} export`}
+                                            >
+                                                {isExportingThis ? (
+                                                    <ActivityIndicator size="small" color="#2563EB" />
+                                                ) : (
+                                                    <Text style={styles.exportMenuActionText}>Share</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleSaveToDevice(fmt)}
+                                                disabled={disabled}
+                                                style={[styles.exportMenuActionButton, disabled && styles.disabledOpacity]}
+                                                accessibilityLabel={`Save ${label} export to device`}
+                                            >
+                                                {isSavingThis ? (
+                                                    <ActivityIndicator size="small" color="#2563EB" />
+                                                ) : (
+                                                    <Text style={styles.exportMenuActionText}>Save</Text>
+                                                )}
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                )
+                            })}
+                        </TouchableOpacity>
                     </TouchableOpacity>
                 </Modal>
 
@@ -1453,7 +1600,14 @@ const styles = StyleSheet.create({
     },
     exportButtonText: { fontSize: 13, fontWeight: '600', color: '#374151' },
     menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center', padding: 16 },
-    exportMenu: { width: 220, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 4 },
+
+    // Export menu container width must fit: horizontal padding (16+16)
+    // + label (110) + gap (8) + action button (64) + gap (8) + action
+    // button (64) = 286px minimum. The previous 260 was ~26px too
+    // narrow, which is exactly why the Save column was spilling outside
+    // the white card. Bumped to 300 for a bit of breathing room.
+    exportMenu: { width: 300, backgroundColor: '#fff', borderRadius: 12, paddingVertical: 4 },
+
     chartModalCard: {
         width: '100%',
         maxWidth: 360,
@@ -1472,6 +1626,49 @@ const styles = StyleSheet.create({
     chartModalClose: { padding: 4 },
     exportMenuItem: { paddingHorizontal: 16, paddingVertical: 12 },
     exportMenuItemText: { fontSize: 14, color: '#374151' },
+
+    // LAYOUT FIX: removed `justifyContent: 'space-between'` — that was
+    // the source of the misalignment, since it let the actions group's
+    // X position depend on how wide the label text happened to be.
+    // Row is now a plain flex-row; the label's fixed width (below) plus
+    // this row's own padding fully determines where the actions column
+    // starts, so it's identical on every row.
+    exportMenuRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        gap: 8,
+    },
+
+    // LAYOUT FIX: fixed `width` (not `minWidth`/content-based sizing) so
+    // "CSV", "Excel (XLSX)", and "PDF" all reserve exactly the same
+    // horizontal space. This is what makes the Share/Save button column
+    // start at the same X regardless of label length. Longer labels
+    // that would overflow this width are clipped with an ellipsis via
+    // numberOfLines={1} on the Text itself, rather than pushing layout.
+    exportMenuLabel: {
+        width: 100,
+        fontSize: 14,
+        color: '#374151',
+    },
+
+    exportMenuActions: { flexDirection: 'row', gap: 8 },
+
+    // LAYOUT FIX: fixed `width` (not `minWidth`) so "Share" and "Save" —
+    // different string lengths — render as identically-sized buttons.
+    // Combined with the fixed-width label above, this guarantees the
+    // Share column and the Save column each sit at one consistent X
+    // position across all three rows.
+    exportMenuActionButton: {
+        width: 64,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: '#EFF6FF',
+    },
+    exportMenuActionText: { fontSize: 12, fontWeight: '600', color: '#2563EB' },
     allBusinessesNote: { fontSize: 12, color: '#9CA3AF', marginBottom: 16, marginTop: -4 },
     filterPanel: { borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 12, padding: 16, marginBottom: 16, gap: 12 },
     filterField: {},
