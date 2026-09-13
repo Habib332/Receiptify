@@ -118,7 +118,7 @@ export default function SignIn() {
         setGoogleLoading(true)
 
         try {
-            const redirectUri = AuthSession.makeRedirectUri({ useProxy: true } as any)
+            const redirectUri = AuthSession.makeRedirectUri({ scheme: 'receiptify' })
             const authUrl = `${API_BASE_URL}/auth/google?platform=mobile&redirect_uri=${encodeURIComponent(redirectUri)}`
 
             const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri)
