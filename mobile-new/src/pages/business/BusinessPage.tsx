@@ -655,7 +655,7 @@ export default function BusinessPage() {
                             Search, manage, and keep track of all your businesses in one place.
                         </Text>
                         <TouchableOpacity style={styles.heroButton} onPress={() => setShowAddModal(true)}>
-                            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.white} strokeWidth={2} />
+                            <Icon d="M12 4.5v15m7.5-7.5h-15" size={16} color={colors.blue600} strokeWidth={2} />
                             <Text style={styles.heroButtonText}>Add Business</Text>
                         </TouchableOpacity>
                     </View>
