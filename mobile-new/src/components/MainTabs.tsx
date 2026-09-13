@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { View, Image, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Path, Circle } from 'react-native-svg'
+import { getStoredUser, setStoredUser } from '../api/config'
 
 import BusinessPage from '../pages/business/BusinessPage'
 import Dashboard from '../pages/dashboard/Dashboard'
@@ -86,6 +87,21 @@ function getInitials(name: string) {
 
 // Avatar-as-tab-icon: shows the user's photo (or initials) instead of an
 // SVG glyph, with a blue ring when the Profile tab is active.
+//
+// IMPORTANT FIX: previously this only checked `avatarUrl` truthiness and
+// rendered <Image>, but never handled a failed image load (bad URL, no
+// Renders the photo whenever avatarUrl exists, full stop — no
+// load-state gating that can get "stuck" hidden after a transient
+// decode/network hiccup during a re-render (which is what was happening
+// on every tab switch: the tab bar re-renders because `state.index`
+// changes, RN's <Image> briefly re-validates the remote source, an
+// occasional onError fired, and nothing ever set it back to visible
+// since avatarUrl itself hadn't changed).
+//
+// Initials are rendered underneath, absolutely positioned, as a permanent
+// fallback layer — if the image ever fails, you see initials appear
+// behind it; if it loads, it just covers the initials. Nothing toggles
+// the image out of the tree, so it can't "disappear".
 function ProfileIcon({
     active,
     avatarUrl,
@@ -96,12 +112,24 @@ function ProfileIcon({
     name: string
 }) {
     return (
-        <View style={[styles.profileAvatar, active && styles.profileAvatarActive]}>
-            {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.profileAvatarImg} />
-            ) : (
+        <View style={styles.profileAvatar}>
+            <View style={[StyleSheet.absoluteFillObject, styles.profileAvatarInitialsWrap]}>
                 <Animated.Text style={styles.profileAvatarInitials}>{getInitials(name || '?')}</Animated.Text>
+            </View>
+            {!!avatarUrl && (
+                <Image
+                    source={{ uri: avatarUrl }}
+                    style={[StyleSheet.absoluteFillObject, styles.profileAvatarImg, { zIndex: 2 }]}
+                />
             )}
+            <View
+                pointerEvents="none"
+                style={[
+                    StyleSheet.absoluteFillObject,
+                    styles.profileAvatarRing,
+                    { borderColor: active ? '#2563EB' : 'transparent', zIndex: 3 },
+                ]}
+            />
         </View>
     )
 }
@@ -162,7 +190,7 @@ function AnimatedTabIcon({ isFocused, children }: { isFocused: boolean; children
 // raised scan / badge / history / profile). Labels removed; bar and
 // icons enlarged; icons scale + jiggle on selection.
 
-function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
+function CustomTabBar({ state, navigation, avatarUrl, name, onRefresh }: any) {
     const insets = useSafeAreaInsets()
 
     return (
@@ -184,6 +212,7 @@ function CustomTabBar({ state, navigation, avatarUrl, name }: any) {
                         if (!isFocused && !event.defaultPrevented) {
                             navigation.navigate(route.name)
                         }
+                        onRefresh?.()
                     }
 
                     if (isScan) {
@@ -254,40 +283,63 @@ export default function MainTabs() {
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
     const [name, setName] = useState('')
 
+    const fetchMe = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
+                method: 'GET',
+                headers: await authHeaders(),
+            })
+
+            const json = await res.json()
+
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'Failed to load user')
+            }
+
+            const nextAvatar = json.data.user.avatar_url ?? null
+            const nextName = json.data.user.name ?? ''
+
+            setAvatarUrl(nextAvatar)
+            setName(nextName)
+
+            // Persist so the tab bar can hydrate instantly next time,
+            // instead of sitting blank until this network call resolves.
+            setStoredUser({ avatar_url: nextAvatar, name: nextName }).catch(() => {})
+        } catch (err) {
+            console.error(err)
+        }
+    }, [])
+
+    // Hydrate immediately from whatever we last saved, so the icon is
+    // never blank while the network call is in flight — then fetch fresh
+    // data on top.
     useEffect(() => {
         let cancelled = false
 
-        async function fetchMe() {
+        async function hydrateThenFetch() {
             try {
-                const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
-                    method: 'GET',
-                    headers: await authHeaders(),
-                })
-
-                const json = await res.json()
-
-                if (!res.ok || !json.success) {
-                    throw new Error(json.message || 'Failed to load user')
-                }
-
-                if (!cancelled) {
-                    setAvatarUrl(json.data.user.avatar_url)
-                    setName(json.data.user.name)
+                const cached = await getStoredUser<{ avatar_url: string | null; name: string }>()
+                if (!cancelled && cached) {
+                    setAvatarUrl(cached.avatar_url ?? null)
+                    setName(cached.name ?? '')
                 }
             } catch (err) {
                 console.error(err)
             }
+            if (!cancelled) {
+                await fetchMe()
+            }
         }
 
-        fetchMe()
+        hydrateThenFetch()
         return () => {
             cancelled = true
         }
-    }, [])
+    }, [fetchMe])
 
     return (
         <Tab.Navigator
-            tabBar={(props) => <CustomTabBar {...props} avatarUrl={avatarUrl} name={name} />}
+            tabBar={(props) => <CustomTabBar {...props} avatarUrl={avatarUrl} name={name} onRefresh={fetchMe} />}
             screenOptions={{ headerShown: false }}
             initialRouteName="Dashboard"
         >
@@ -347,13 +399,16 @@ const styles = StyleSheet.create({
         height: 26,
         borderRadius: 13,
         backgroundColor: '#DBEAFE',
-        alignItems: 'center',
-        justifyContent: 'center',
         overflow: 'hidden',
     },
-    profileAvatarActive: {
+    profileAvatarInitialsWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1,
+    },
+    profileAvatarRing: {
+        borderRadius: 13,
         borderWidth: 1.5,
-        borderColor: '#2563EB',
     },
     profileAvatarImg: {
         width: '100%',

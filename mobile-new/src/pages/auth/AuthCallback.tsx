@@ -62,7 +62,7 @@ export default function AuthCallback() {
 
                 // Same as password login: identityToken has no business
                 // selected yet, so route to business selection/creation next.
-                navigation.navigate('SelectBusiness')
+                navigation.navigate('MainTabs', { screen: 'Businesses' })
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Something went wrong')
             }
