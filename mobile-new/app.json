@@ -7,15 +7,24 @@
     "icon": "./assets/icon.png",
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/splash-icon.png",
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#116FF4"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.receiptify.app"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon-white.png",
+          "imageWidth": 150,
+          "resizeMode": "contain",
+          "backgroundColor": "#2563EB"
+        }
+      ]
     ],
     "extra": {
       "eas": {
