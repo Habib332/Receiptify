@@ -8,7 +8,6 @@ import {
     ScrollView,
     ActivityIndicator,
     StyleSheet,
-    Linking,
     Dimensions,
     StatusBar,
     KeyboardAvoidingView,
@@ -20,6 +19,8 @@ import { Feather } from '@expo/vector-icons'
 import { BlurView } from 'expo-blur'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import * as WebBrowser from 'expo-web-browser'
+import * as AuthSession from 'expo-auth-session'
 import type { RootStackParamList } from '../../../App'
 import { API_BASE_URL, setToken, setStoredUser } from '../../api/config'
 import ReceiptLogo from '../../logo/MainLogo'
@@ -46,6 +47,7 @@ export default function SignIn() {
     const [showPassword, setShowPassword] = useState(false)
 
     const [loading, setLoading] = useState(false)
+    const [googleLoading, setGoogleLoading] = useState(false)
     const [error, setError] = useState('')
 
     const [keyboardVisible, setKeyboardVisible] = useState(false)
@@ -104,6 +106,70 @@ export default function SignIn() {
         }
     }
 
+    // Uses Expo's auth proxy (auth.expo.io) as the OAuth redirect target.
+    // Expo Go can't claim a custom URL scheme like receiptify://, but it
+    // *can* catch its own exp:// scheme, and the proxy bridges Google's
+    // https redirect into that. openAuthSessionAsync opens the flow in a
+    // proper in-app browser session and resolves directly with the final
+    // redirect URL once Google sends the user back — no deep-link/
+    // AuthCallback screen needed for this path.
+    const handleGoogleSignIn = async () => {
+        setError('')
+        setGoogleLoading(true)
+
+        try {
+            const redirectUri = AuthSession.makeRedirectUri({ useProxy: true } as any)
+            const authUrl = `${API_BASE_URL}/auth/google?platform=mobile&redirect_uri=${encodeURIComponent(redirectUri)}`
+
+            const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri)
+
+            if (result.type !== 'success' || !result.url) {
+                // User cancelled or dismissed — not an error state.
+                return
+            }
+
+            const url = new URL(result.url)
+            const code = url.searchParams.get('code')
+            const oauthError = url.searchParams.get('error')
+
+            if (oauthError) {
+                setError('Google sign-in was cancelled or failed. Please try again.')
+                return
+            }
+
+            if (!code) {
+                setError('Missing sign-in code. Please try again.')
+                return
+            }
+
+            const res = await fetch(`${API_BASE_URL}/auth/google/exchange`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || 'Sign-in failed')
+            }
+
+            const token = data.data?.identityToken
+
+            if (token) {
+                await setToken(token)
+            }
+
+            // Same as password login: identityToken has no business
+            // selected yet, so route to business selection/creation next.
+            navigation.navigate('MainTabs', { screen: 'Businesses' })
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong')
+        } finally {
+            setGoogleLoading(false)
+        }
+    }
+
     return (
         <View style={styles.root}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
@@ -154,10 +220,17 @@ export default function SignIn() {
                                     <TouchableOpacity
                                         style={styles.socialButton}
                                         activeOpacity={0.7}
-                                        onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google?platform=mobile`)}
+                                        onPress={handleGoogleSignIn}
+                                        disabled={googleLoading}
                                     >
-                                        <GoogleLogo />
-                                        <Text style={styles.socialButtonText}>Google</Text>
+                                        {googleLoading ? (
+                                            <ActivityIndicator size="small" color="#374151" />
+                                        ) : (
+                                            <>
+                                                <GoogleLogo />
+                                                <Text style={styles.socialButtonText}>Google</Text>
+                                            </>
+                                        )}
                                     </TouchableOpacity>
                                     <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
                                         <AppleLogo />

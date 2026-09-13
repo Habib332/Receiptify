@@ -4,9 +4,7 @@
     "slug": "mobile-new",
     "scheme": "receiptify",
     "version": "1.0.0",
-
     "icon": "./assets/icon.png",
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/splash-icon.png",
@@ -15,6 +13,9 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.receiptify.app"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }

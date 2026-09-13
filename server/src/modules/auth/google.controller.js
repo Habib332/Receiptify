@@ -2,8 +2,15 @@ const googleService = require("./google.service");
 const env = require("../../config/env");
 
 const STATE_COOKIE = "g_oauth_state";
+const REDIRECT_COOKIE = "g_oauth_redirect";
 
-function getCallbackBaseUrl(state) {
+function getCallbackBaseUrl(state, storedRedirectUri) {
+  // If the app told us where to send it back (mobile/Expo Go flow),
+  // trust that over the hardcoded .env fallback.
+  if (storedRedirectUri) {
+    return storedRedirectUri;
+  }
+
   const platform = state?.startsWith("mobile.") ? "mobile" : "web";
   return platform === "mobile" ? env.mobileOAuthCallbackUrl : env.frontendOAuthCallbackUrl;
 }
@@ -11,6 +18,7 @@ function getCallbackBaseUrl(state) {
 async function redirectToGoogle(req, res, next) {
   try {
     const platform = req.query.platform === "mobile" ? "mobile" : "web";
+    const redirectUri = req.query.redirect_uri; // captured from the app's request
     const { url, state } = googleService.buildAuthRedirect(platform);
 
     res.cookie(STATE_COOKIE, state, {
@@ -20,6 +28,15 @@ async function redirectToGoogle(req, res, next) {
       maxAge: 5 * 60 * 1000,
     });
 
+    if (redirectUri) {
+      res.cookie(REDIRECT_COOKIE, redirectUri, {
+        httpOnly: true,
+        secure: env.nodeEnv === "production",
+        sameSite: "lax",
+        maxAge: 5 * 60 * 1000,
+      });
+    }
+
     res.redirect(url);
   } catch (err) {
     next(err);
@@ -28,12 +45,14 @@ async function redirectToGoogle(req, res, next) {
 
 async function handleCallback(req, res, next) {
   const expectedState = req.cookies?.[STATE_COOKIE];
-  const callbackBaseUrl = getCallbackBaseUrl(expectedState);
+  const storedRedirectUri = req.cookies?.[REDIRECT_COOKIE];
+  const callbackBaseUrl = getCallbackBaseUrl(expectedState, storedRedirectUri);
 
   try {
     const { code, state, error: googleError } = req.query;
 
     res.clearCookie(STATE_COOKIE);
+    res.clearCookie(REDIRECT_COOKIE);
 
     if (googleError) {
       return res.redirect(`${callbackBaseUrl}?error=${encodeURIComponent(googleError)}`);
