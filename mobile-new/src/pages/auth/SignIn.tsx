@@ -43,9 +43,6 @@ export default function SignIn() {
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
-    // Controls whether the password field's characters are masked. Off
-    // (masked) by default, same as any standard sign-in form; toggled by
-    // the eye icon inside the field.
     const [showPassword, setShowPassword] = useState(false)
 
     const [loading, setLoading] = useState(false)
@@ -111,7 +108,6 @@ export default function SignIn() {
         <View style={styles.root}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-            {/* Hero stays mounted always now — we blur it instead of unmounting it */}
             <View
                 style={[
                     styles.hero,
@@ -158,7 +154,7 @@ export default function SignIn() {
                                     <TouchableOpacity
                                         style={styles.socialButton}
                                         activeOpacity={0.7}
-                                        onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google`)}
+                                        onPress={() => Linking.openURL(`${API_BASE_URL}/auth/google?platform=mobile`)}
                                     >
                                         <GoogleLogo />
                                         <Text style={styles.socialButtonText}>Google</Text>
@@ -256,13 +252,8 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
-    root: {
-        flex: 1,
-        backgroundColor: '#fff',
-    },
-    flex: {
-        flex: 1,
-    },
+    root: { flex: 1, backgroundColor: '#fff' },
+    flex: { flex: 1 },
     hero: {
         position: 'absolute',
         top: HERO_TOP_OFFSET,
@@ -272,19 +263,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#F3F4F6',
         overflow: 'hidden',
     },
-    heroKeyboardOpen: {
-        // Shrinks the hero to a slim strip behind the sheet when keyboard is open,
-        // rather than fully hiding it — gives the blurred peek-through effect.
-        height: 140,
-    },
-    heroImage: {
-        width: '100%',
-        height: '100%',
-    },
-    safeArea: {
-        flex: 1,
-        backgroundColor: 'transparent',
-    },
+    heroKeyboardOpen: { height: 140 },
+    heroImage: { width: '100%', height: '100%' },
+    safeArea: { flex: 1, backgroundColor: 'transparent' },
     screen: {},
     sheet: {
         marginTop: HERO_TOP_OFFSET + HERO_HEIGHT,
@@ -295,15 +276,8 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
         overflow: 'hidden',
     },
-    sheetKeyboardOpen: {
-        marginTop: 140,
-    },
-    formWrap: {
-        width: '100%',
-        maxWidth: 384,
-        alignSelf: 'center',
-        paddingHorizontal: 20,
-    },
+    sheetKeyboardOpen: { marginTop: 140 },
+    formWrap: { width: '100%', maxWidth: 384, alignSelf: 'center', paddingHorizontal: 20 },
     logoWrap: { marginBottom: 14 },
     heading: { fontSize: 24, fontWeight: '700', color: '#111827', letterSpacing: -0.3 },
     subheading: { fontSize: 13, color: '#6B7280', marginTop: 4, marginBottom: 20 },
@@ -350,14 +324,8 @@ const styles = StyleSheet.create({
     },
     inputIcon: { marginRight: 8 },
     input: { flex: 1, fontSize: 14, color: '#111827' },
-    // Extra right-padding on the password field so typed text never runs
-    // underneath the eye icon that sits at the end of the row.
     inputWithTrailingIcon: { paddingRight: 8 },
-    trailingIconButton: {
-        paddingHorizontal: 4,
-        paddingVertical: 4,
-        marginLeft: 4,
-    },
+    trailingIconButton: { paddingHorizontal: 4, paddingVertical: 4, marginLeft: 4 },
     submitButton: {
         width: '100%',
         backgroundColor: '#2563EB',

@@ -30,8 +30,9 @@ const ApiError = require("../../utils/apiError");
  *    full sessionToken.
  */
 
-function buildAuthRedirect() {
-  const state = googleOAuth.generateState();
+function buildAuthRedirect(platform = "web") {
+  const rawState = googleOAuth.generateState();
+  const state = `${platform}.${rawState}`;
   const url = googleOAuth.getAuthUrl(state);
   return { url, state };
 }

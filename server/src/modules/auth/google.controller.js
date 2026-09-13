@@ -3,16 +3,20 @@ const env = require("../../config/env");
 
 const STATE_COOKIE = "g_oauth_state";
 
+function getCallbackBaseUrl(state) {
+  const platform = state?.startsWith("mobile.") ? "mobile" : "web";
+  return platform === "mobile" ? env.mobileOAuthCallbackUrl : env.frontendOAuthCallbackUrl;
+}
+
 async function redirectToGoogle(req, res, next) {
   try {
-    const { url, state } = googleService.buildAuthRedirect();
+    const platform = req.query.platform === "mobile" ? "mobile" : "web";
+    const { url, state } = googleService.buildAuthRedirect(platform);
 
-    // Short-lived, httpOnly cookie just to survive the round trip to Google
-    // and back. Not used for anything beyond CSRF-checking this one flow.
     res.cookie(STATE_COOKIE, state, {
       httpOnly: true,
       secure: env.nodeEnv === "production",
-      sameSite: "lax", // 'lax' (not 'strict') because this cookie must survive Google's cross-site redirect back
+      sameSite: "lax",
       maxAge: 5 * 60 * 1000,
     });
 
@@ -23,33 +27,28 @@ async function redirectToGoogle(req, res, next) {
 }
 
 async function handleCallback(req, res, next) {
+  const expectedState = req.cookies?.[STATE_COOKIE];
+  const callbackBaseUrl = getCallbackBaseUrl(expectedState);
+
   try {
     const { code, state, error: googleError } = req.query;
-    const expectedState = req.cookies?.[STATE_COOKIE];
 
     res.clearCookie(STATE_COOKIE);
 
     if (googleError) {
-      // User declined consent, or Google-side error
-      return res.redirect(
-        `${env.frontendOAuthCallbackUrl}?error=${encodeURIComponent(googleError)}`,
-      );
+      return res.redirect(`${callbackBaseUrl}?error=${encodeURIComponent(googleError)}`);
     }
 
     if (!code || !state || state !== expectedState) {
-      return res.redirect(
-        `${env.frontendOAuthCallbackUrl}?error=invalid_state`,
-      );
+      return res.redirect(`${callbackBaseUrl}?error=invalid_state`);
     }
 
     const exchangeCode = await googleService.handleCallback(code);
 
-    res.redirect(`${env.frontendOAuthCallbackUrl}?code=${exchangeCode}`);
+    res.redirect(`${callbackBaseUrl}?code=${exchangeCode}`);
   } catch (err) {
-    // Don't leak internal errors into a redirect query string; log and
-    // send a generic error flag instead.
     console.error("Google OAuth callback failed:", err);
-    res.redirect(`${env.frontendOAuthCallbackUrl}?error=oauth_failed`);
+    res.redirect(`${callbackBaseUrl}?error=oauth_failed`);
   }
 }
 
@@ -58,9 +57,7 @@ async function exchange(req, res, next) {
     const { code } = req.body;
 
     if (!code) {
-      return res
-        .status(400)
-        .json({ success: false, message: "code is required" });
+      return res.status(400).json({ success: false, message: "code is required" });
     }
 
     const result = await googleService.exchangeCode(code);
