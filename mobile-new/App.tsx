@@ -4,7 +4,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { SystemBars } from 'react-native-edge-to-edge'
 import { View } from 'react-native'
 
-import SplashScreen from './src/pages/splash/SplashScreen'
 import SignIn from './src/pages/auth/SignIn'
 import SignUp from './src/pages/auth/SignUp'
 import ForgotPassword from './src/pages/auth/ForgotPassword'
@@ -25,8 +24,12 @@ import { StackScreen } from 'react-native-screens'
 // the MainTabs bottom-tab navigator (src/navigation/MainTabs.tsx) instead
 // of directly on this stack. Screens still nested here can navigate into
 // them via navigation.navigate('MainTabs', { screen: 'Dashboard', params: {...} }).
+//
+// NOTE: the standalone JS "Splash" screen has been removed (see Option B
+// discussion) — the app now relies entirely on the native splash screen
+// (configured via the expo-splash-screen plugin in app.json) to cover the
+// cold-start gap, and boots straight into SignIn once JS is ready.
 export type RootStackParamList = {
-    Splash: undefined // initial launch screen, shown for a couple seconds
     SignIn: undefined // '/', '/sign-in'
     SignUp: undefined // '/sign-up'
     ForgotPassword: undefined // '/forgot-password'
@@ -47,10 +50,9 @@ export default function App() {
                 <SystemBars style="dark" />
                 <NavigationContainer>
                     <Stack.Navigator
-                        initialRouteName="Splash"
+                        initialRouteName="SignIn"
                         screenOptions={{ headerShown: false }}
                     >
-                        <Stack.Screen name="Splash" component={SplashScreen} />
                         <Stack.Screen name="SignIn" component={SignIn} />
                         <Stack.Screen name="SignUp" component={SignUp} />
                         <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
