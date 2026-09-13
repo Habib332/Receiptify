@@ -19,6 +19,7 @@ const env = {
   googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
   googleRedirectUri: required("GOOGLE_REDIRECT_URI"),
   frontendOAuthCallbackUrl: required("FRONTEND_OAUTH_CALLBACK_URL"),
+  mobileOAuthCallbackUrl: required("MOBILE_OAUTH_CALLBACK_URL"),
 
   supabaseUrl: required("SUPABASE_URL"),
   supabaseServiceRoleKey: required("SUPABASE_SERVICE_ROLE_KEY"),
